@@ -1,0 +1,56 @@
+{
+  "Version": 3,
+  "FileReferences": {
+    "Moc": "小恶魔.moc3",
+    "Textures": [
+      "小恶魔.8192/texture_00.png"
+    ],
+    "Physics": "小恶魔.physics3.json",
+    "DisplayInfo": "小恶魔.cdi3.json",
+    "Expressions": [
+      {
+        "Name": "头发",
+        "File": "1.exp3.json"
+      },
+      {
+        "Name": "唱歌",
+        "File": "2.exp3.json"
+      },
+      {
+        "Name": "嘟嘴",
+        "File": "3.exp3.json"
+      },
+      {
+        "Name": "脸黑",
+        "File": "4.exp3.json"
+      },
+      {
+        "Name": "流泪",
+        "File": "5.exp3.json"
+      },
+      {
+        "Name": "恶魔",
+        "File": "6.exp3.json"
+      },
+      {
+        "Name": "外套",
+        "File": "7.exp3.json"
+      }
+    ]
+  },
+  "Groups": [
+    {
+      "Target": "Parameter",
+      "Name": "LipSync",
+      "Ids": []
+    },
+    {
+      "Target": "Parameter",
+      "Name": "EyeBlink",
+      "Ids": [
+        "ParamEyeLOpen",
+        "ParamEyeROpen"
+      ]
+    }
+  ]
+}
