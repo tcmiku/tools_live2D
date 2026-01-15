@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+*.egg-info/
+.dist/
+build/
+
+# Virtual env
+.venv/
+venv/
+ENV/
+
+# Logs & runtime data
+data/
+data/*.log
+data/app.log
+
+# Local runtime data (can be regenerated)
+data/*.json
+
+# Local settings
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

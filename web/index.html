@@ -1,0 +1,844 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>桌面桌宠</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        font-family: "Segoe UI", Arial, sans-serif;
+        position: relative;
+      }
+      body.move-mode #canvas {
+        cursor: move;
+      }
+      body.move-mode #chat-panel {
+        opacity: 0.6;
+        pointer-events: auto;
+      }
+      body.move-mode #chat-box,
+      body.move-mode #chat-input-bar {
+        pointer-events: none;
+        opacity: 0.35;
+      }
+      #canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        position: absolute;
+        left: 0;
+        top: 0;
+        background: transparent;
+      }
+      #chat-panel {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        width: 260px;
+        color: #e9eef8;
+        border-radius: 14px;
+        padding: 10px;
+        box-sizing: border-box;
+        background:
+          radial-gradient(140px 80px at 20% 10%, rgba(111, 168, 255, 0.18), transparent 60%),
+          linear-gradient(160deg, rgba(18, 22, 30, 0.92), rgba(24, 28, 36, 0.78));
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(120, 150, 210, 0.2);
+        box-shadow: 0 16px 34px rgba(8, 12, 20, 0.5);
+        transition: transform 0.2s ease, opacity 0.2s ease;
+        z-index: 10;
+      }
+      #chat-panel.hidden {
+        display: none;
+      }
+      #chat-panel.collapsed {
+        opacity: 0.85;
+      }
+      #chat-panel.collapsed #chat-box,
+      #chat-panel.collapsed #chat-input-bar {
+        display: none;
+      }
+      #chat-handle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+        padding: 8px;
+        cursor: pointer;
+        user-select: none;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      #chat-handle .handle-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      #move-toggle,
+      #settings-toggle {
+        border: 1px solid rgba(120, 150, 210, 0.35);
+        background: rgba(18, 26, 40, 0.7);
+        color: #dbe7ff;
+        border-radius: 8px;
+        font-size: 11px;
+        padding: 3px 8px;
+        cursor: pointer;
+      }
+      #move-toggle:hover {
+        background: rgba(0, 0, 0, 0.35);
+      }
+      #move-toggle:hover,
+      #settings-toggle:hover {
+        background: rgba(38, 54, 82, 0.85);
+      }
+      #settings-panel {
+        position: absolute;
+        left: 12px;
+        bottom: 60px;
+        width: 240px;
+        background: rgba(15, 15, 15, 0.85);
+        color: #fff;
+        border-radius: 10px;
+        padding: 10px;
+        box-sizing: border-box;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        display: none;
+        z-index: 12;
+      }
+      #context-menu {
+        position: absolute;
+        min-width: 120px;
+        background: rgba(18, 18, 18, 0.9);
+        color: #fff;
+        border-radius: 8px;
+        padding: 6px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        display: none;
+        z-index: 20;
+      }
+      #context-menu.visible {
+        display: block;
+      }
+      #context-menu button {
+        width: 100%;
+        background: transparent;
+        border: none;
+        color: #fff;
+        text-align: left;
+        padding: 6px 8px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      #context-menu button:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+      #ai-panel {
+        width: 280px;
+      }
+      #passive-panel {
+        width: 260px;
+      }
+      .tool-panel {
+        position: absolute;
+        right: 12px;
+        bottom: 60px;
+        width: 260px;
+        background: rgba(22, 22, 22, 0.88);
+        color: #fff;
+        border-radius: 10px;
+        padding: 10px;
+        box-sizing: border-box;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        display: none;
+        z-index: 12;
+        max-height: calc(100vh - 120px);
+        overflow: auto;
+      }
+      .tool-panel::-webkit-scrollbar {
+        width: 6px;
+      }
+      .tool-panel::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, rgba(120, 160, 220, 0.55), rgba(90, 120, 190, 0.65));
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .tool-panel::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 999px;
+      }
+      #clipboard-list::-webkit-scrollbar,
+      #chat-box::-webkit-scrollbar,
+      #todo-list::-webkit-scrollbar {
+        width: 6px;
+      }
+      #clipboard-list::-webkit-scrollbar-thumb,
+      #chat-box::-webkit-scrollbar-thumb,
+      #todo-list::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, rgba(120, 160, 220, 0.55), rgba(90, 120, 190, 0.65));
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      #clipboard-list::-webkit-scrollbar-track,
+      #chat-box::-webkit-scrollbar-track,
+      #todo-list::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 999px;
+      }
+      .tool-panel.visible {
+        display: block;
+      }
+      .tool-panel .panel-title {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: move;
+      }
+      .panel-close {
+        border: none;
+        background: transparent;
+        color: #fff;
+        font-size: 16px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0 4px;
+      }
+      .panel-close:hover {
+        color: #ffb4b4;
+      }
+      .tools-grid {
+        display: grid;
+        gap: 8px;
+      }
+      .tools-grid button {
+        width: 100%;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(0, 0, 0, 0.2);
+        color: #fff;
+        border-radius: 8px;
+        padding: 8px 10px;
+        cursor: pointer;
+        text-align: left;
+      }
+      .tools-grid button:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+        font-size: 12px;
+      }
+      .toggle-row input[type="number"] {
+        width: 64px;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #fff;
+        border-radius: 6px;
+        padding: 2px 6px;
+      }
+      .todo-row {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      #todo-title,
+      #todo-time {
+        flex: 1;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #fff;
+        border-radius: 6px;
+        padding: 4px 6px;
+      }
+      #todo-panel {
+        width: 300px;
+      }
+      #todo-panel .panel-title {
+        cursor: move;
+      }
+      #todo-add {
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(0, 0, 0, 0.2);
+        color: #fff;
+        border-radius: 6px;
+        padding: 4px 8px;
+        cursor: pointer;
+      }
+      #todo-list {
+        max-height: 140px;
+        overflow-y: auto;
+        display: grid;
+        gap: 6px;
+      }
+      .todo-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #fff;
+        border-radius: 8px;
+        padding: 6px 8px;
+        font-size: 12px;
+      }
+      .todo-remove {
+        border: none;
+        background: transparent;
+        color: #ffb4b4;
+        cursor: pointer;
+      }
+      #note-text {
+        width: 100%;
+        height: 160px;
+        background: rgba(0, 0, 0, 0.22);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        color: #fff;
+        border-radius: 8px;
+        padding: 8px;
+        resize: none;
+        line-height: 1.5;
+      }
+      #note-text::placeholder {
+        color: rgba(255, 255, 255, 0.6);
+      }
+      #clipboard-search {
+        width: 100%;
+        margin-bottom: 6px;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #fff;
+        border-radius: 8px;
+        padding: 6px 8px;
+        box-sizing: border-box;
+      }
+      #clipboard-list {
+        max-height: 140px;
+        overflow-y: auto;
+        display: grid;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      .clipboard-item {
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #fff;
+        border-radius: 8px;
+        padding: 6px 8px;
+        text-align: left;
+        cursor: pointer;
+      }
+      .clipboard-item:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+      #clipboard-clear {
+        width: 100%;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(0, 0, 0, 0.2);
+        color: #fff;
+        border-radius: 8px;
+        padding: 6px 8px;
+        cursor: pointer;
+      }
+      .sys-row {
+        font-size: 12px;
+        margin-bottom: 6px;
+      }
+      .progress-track {
+        width: 100%;
+        height: 8px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 999px;
+        overflow: hidden;
+      }
+      .progress-bar {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #6ed7a7, #4f86ff);
+        border-radius: 999px;
+        transition: width 0.2s ease;
+      }
+      #settings-panel.visible {
+        display: block;
+      }
+      #settings-panel h4 {
+        margin: 0 0 8px 0;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .setting-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+        font-size: 11px;
+      }
+      .setting-row input[type="range"] {
+        flex: 1;
+      }
+      .setting-row input[type="number"] {
+        width: 64px;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #fff;
+        border-radius: 6px;
+        padding: 2px 6px;
+      }
+      #settings-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+      }
+      #settings-actions button {
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(0, 0, 0, 0.2);
+        color: #fff;
+        border-radius: 6px;
+        font-size: 11px;
+        padding: 3px 8px;
+        cursor: pointer;
+      }
+      body {
+        --ui-scale: 1;
+      }
+      #chat-panel,
+      #settings-panel,
+      .tool-panel {
+        transform: scale(var(--ui-scale));
+        transform-origin: left bottom;
+      }
+      #chat-handle span {
+        letter-spacing: 0.2px;
+      }
+      #chat-handle .label {
+        font-weight: 600;
+        letter-spacing: 0.6px;
+      }
+      #more-info-panel {
+        width: 260px;
+      }
+      #more-info-panel .info-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 12px;
+        margin-bottom: 6px;
+      }
+      #more-info-panel .info-label {
+        color: rgba(200, 210, 230, 0.9);
+      }
+      #chat-handle .hint {
+        font-size: 11px;
+        opacity: 0.7;
+      }
+      #chat-box {
+        height: 104px;
+        overflow-y: auto;
+        font-size: 12px;
+        margin: 8px 2px 6px;
+        padding-right: 4px;
+      }
+      .msg {
+        margin: 6px 0;
+        line-height: 1.35;
+        padding: 6px 8px;
+        border-radius: 8px;
+        max-width: 92%;
+      }
+      .msg.user {
+        margin-left: auto;
+        text-align: left;
+        color: #cfe6ff;
+        background: rgba(79, 134, 255, 0.22);
+        border: 1px solid rgba(79, 134, 255, 0.35);
+      }
+      .msg.pet {
+        margin-right: auto;
+        text-align: left;
+        color: #f7e6b3;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      #chat-input-bar {
+        display: grid;
+        grid-template-columns: 1fr 52px 52px;
+        gap: 6px;
+      }
+      #chat-input {
+        border: 1px solid rgba(120, 150, 210, 0.35);
+        border-radius: 8px;
+        padding: 6px 8px;
+        background: rgba(10, 14, 22, 0.7);
+        color: #fff;
+        outline: none;
+      }
+      #chat-input::placeholder {
+        color: rgba(255, 255, 255, 0.6);
+      }
+      #chat-input-bar button {
+        border: none;
+        border-radius: 8px;
+        padding: 6px 8px;
+        background: linear-gradient(140deg, #4f86ff, #2c5bd6);
+        color: #fff;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      #chat-input-bar button:hover {
+        background: linear-gradient(140deg, #5a92ff, #2e63e6);
+      }
+      .petting-spark {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        font-size: 14px;
+        color: rgba(122, 198, 255, 0.9);
+        pointer-events: none;
+        animation: spark-float 0.8s ease-out forwards;
+        z-index: 30;
+      }
+      #speech-bubble {
+        position: absolute;
+        right: 20px;
+        top: 16px;
+        max-width: 220px;
+        padding: 10px 12px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.92);
+        color: #1b1f28;
+        font-size: 12px;
+        line-height: 1.4;
+        box-shadow: 0 12px 24px rgba(10, 18, 30, 0.2);
+        opacity: 0;
+        transform: translateY(8px);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+        pointer-events: none;
+        z-index: 15;
+      }
+      #speech-bubble.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      #speech-bubble::after {
+        content: "";
+        position: absolute;
+        right: 24px;
+        bottom: -10px;
+        border-width: 10px 8px 0 8px;
+        border-style: solid;
+        border-color: rgba(255, 255, 255, 0.92) transparent transparent transparent;
+      }
+      #quick-toolbar {
+        position: absolute;
+        right: 16px;
+        bottom: 16px;
+        display: flex;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: 999px;
+        background: rgba(18, 22, 30, 0.75);
+        border: 1px solid rgba(120, 150, 210, 0.25);
+        box-shadow: 0 12px 24px rgba(8, 12, 20, 0.35);
+        z-index: 14;
+        opacity: 0.85;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+        user-select: none;
+      }
+      #quick-toolbar.hidden {
+        opacity: 0.2;
+      }
+      #quick-toolbar:hover {
+        opacity: 1;
+      }
+      .quick-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        border: 1px solid rgba(120, 150, 210, 0.4);
+        background: rgba(18, 26, 40, 0.85);
+        color: #e7f0ff;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .quick-btn:hover {
+        background: rgba(38, 54, 82, 0.95);
+      }
+      @keyframes spark-float {
+        0% {
+          opacity: 0;
+          transform: translate(-50%, -40%) scale(0.6);
+        }
+        20% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -90%) scale(1.2);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+    <div id="speech-bubble"></div>
+    <div id="quick-toolbar">
+      <button id="quick-toggle" class="quick-btn" title="显示/隐藏">🎯</button>
+      <button id="quick-note" class="quick-btn" title="便签">📝</button>
+      <button id="quick-pomodoro" class="quick-btn" title="番茄钟">⏰</button>
+      <button id="quick-settings" class="quick-btn" title="设置">⚙️</button>
+    </div>
+    <div id="chat-panel" class="collapsed">
+      <div id="chat-handle">
+        <span class="label">聊天</span>
+        <div class="handle-actions">
+          <button id="move-toggle" type="button">移动</button>
+          <button id="settings-toggle" type="button">设置</button>
+          <span class="hint">点击展开</span>
+        </div>
+      </div>
+      <div id="chat-box"></div>
+      <div id="chat-input-bar">
+        <input id="chat-input" type="text" placeholder="跟桌宠说点什么..." />
+        <button onclick="sendUserMessage()">发送</button>
+        <button id="gift-button" type="button">送礼</button>
+      </div>
+    </div>
+    <div id="settings-panel">
+      <h4>个性化设置</h4>
+      <div class="setting-row">
+        <span>活跃阈值(秒)</span>
+        <input id="active-threshold" type="number" min="1" max="3600" />
+      </div>
+      <div class="setting-row">
+        <span>睡眠阈值(秒)</span>
+        <input id="sleep-threshold" type="number" min="2" max="7200" />
+      </div>
+      <div class="setting-row">
+        <span>透明度</span>
+        <input id="opacity-range" type="range" min="0" max="100" />
+        <input id="opacity-value" type="number" min="0" max="100" />
+      </div>
+      <div class="setting-row">
+        <span>模型缩放</span>
+        <input id="model-scale" type="number" min="0.1" max="2.0" step="0.05" />
+      </div>
+      <div class="setting-row">
+        <span>界面缩放</span>
+        <input id="ui-scale" type="number" min="0.5" max="2.0" step="0.05" />
+      </div>
+      <div class="setting-row">
+        <span>动画速度</span>
+        <input id="anim-speed" type="number" min="0.1" max="2.0" step="0.1" />
+      </div>
+      <div id="settings-actions">
+        <button id="settings-close" type="button">关闭</button>
+        <button id="settings-save" type="button">保存</button>
+      </div>
+    </div>
+    <div id="context-menu">
+      <button id="context-tools" type="button">工具</button>
+      <button id="context-pomodoro" type="button">番茄钟</button>
+      <button id="context-reminders" type="button">智能提醒</button>
+      <button id="context-ai" type="button">AI配置</button>
+      <button id="context-passive" type="button">被动对话</button>
+      <button id="context-more-info" type="button">更多信息</button>
+      <button id="context-settings" type="button">设置</button>
+      <button id="context-chat-toggle" type="button">隐藏聊天框</button>
+    </div>
+    <div id="tools-panel" class="tool-panel">
+      <div class="panel-title">
+        工具
+        <button class="panel-close" data-close="tools-panel" type="button">×</button>
+      </div>
+      <div class="tools-grid">
+        <button id="tool-note" type="button">便签/备忘录</button>
+        <button id="tool-clipboard" type="button">剪贴板历史</button>
+        <button id="tool-sysinfo" type="button">系统信息</button>
+      </div>
+    </div>
+    <div id="note-panel" class="tool-panel">
+      <div class="panel-title">
+        便签
+        <button class="panel-close" data-close="note-panel" type="button">×</button>
+      </div>
+      <textarea id="note-text" placeholder="写点备忘录..."></textarea>
+    </div>
+    <div id="clipboard-panel" class="tool-panel">
+      <div class="panel-title">
+        剪贴板历史
+        <button class="panel-close" data-close="clipboard-panel" type="button">×</button>
+      </div>
+      <input id="clipboard-search" type="text" placeholder="搜索..." />
+      <div id="clipboard-list"></div>
+      <button id="clipboard-clear" type="button">清空记录</button>
+    </div>
+    <div id="sysinfo-panel" class="tool-panel">
+      <div class="panel-title">
+        系统信息
+        <button class="panel-close" data-close="sysinfo-panel" type="button">×</button>
+      </div>
+      <div class="sys-row">CPU：<span id="sys-cpu">-</span></div>
+      <div class="sys-row">内存：<span id="sys-mem">-</span></div>
+      <div class="sys-row">网速：<span id="sys-net">-</span></div>
+      <div class="sys-row">电量：<span id="sys-battery">-</span></div>
+    </div>
+    <div id="pomodoro-panel" class="tool-panel">
+      <div class="panel-title">
+        番茄钟
+        <button class="panel-close" data-close="pomodoro-panel" type="button">×</button>
+      </div>
+      <div class="sys-row">
+        <div class="progress-track"><div id="pomodoro-progress" class="progress-bar"></div></div>
+      </div>
+      <div class="sys-row">模式：<span id="pomodoro-mode">-</span></div>
+      <div class="sys-row">剩余：<span id="pomodoro-remaining">-</span></div>
+      <div class="sys-row">完成番茄：<span id="pomodoro-count">0</span></div>
+      <div class="setting-row">
+        <span>专注(分)</span>
+        <input id="pomodoro-focus" type="number" min="1" max="120" />
+      </div>
+      <div class="setting-row">
+        <span>休息(分)</span>
+        <input id="pomodoro-break" type="number" min="1" max="60" />
+      </div>
+      <div id="settings-actions">
+        <button id="pomodoro-start" type="button">开始</button>
+        <button id="pomodoro-pause" type="button">暂停</button>
+        <button id="pomodoro-stop" type="button">停止</button>
+      </div>
+    </div>
+    <div id="reminder-panel" class="tool-panel">
+      <div class="panel-title">
+        智能提醒
+        <button class="panel-close" data-close="reminder-panel" type="button">×</button>
+      </div>
+      <div class="toggle-row">
+        <label><input id="rest-enabled" type="checkbox" /> 休息提醒(分钟)</label>
+        <input id="rest-interval" type="number" min="10" max="240" />
+      </div>
+      <div class="toggle-row">
+        <label><input id="water-enabled" type="checkbox" /> 喝水提醒(分钟)</label>
+        <input id="water-interval" type="number" min="10" max="240" />
+      </div>
+      <div class="toggle-row">
+        <label><input id="eye-enabled" type="checkbox" /> 护眼提醒(分钟)</label>
+        <input id="eye-interval" type="number" min="10" max="240" />
+      </div>
+      <div class="tools-grid">
+        <button id="open-todo-panel" type="button">打开待办事项</button>
+      </div>
+    </div>
+    <div id="todo-panel" class="tool-panel">
+      <div class="panel-title">
+        待办事项
+        <button class="panel-close" data-close="todo-panel" type="button">×</button>
+      </div>
+      <div class="todo-row">
+        <input id="todo-title" type="text" placeholder="待办事项" />
+        <input id="todo-time" type="datetime-local" />
+        <button id="todo-add" type="button">添加</button>
+      </div>
+      <div id="todo-list"></div>
+    </div>
+    <div id="ai-panel" class="tool-panel">
+      <div class="panel-title">
+        AI 配置
+        <button class="panel-close" data-close="ai-panel" type="button">×</button>
+      </div>
+      <div class="setting-row">
+        <span>提供商</span>
+        <input id="ai-provider" type="text" placeholder="OpenAI兼容" />
+      </div>
+      <div class="setting-row">
+        <span>Base URL</span>
+        <input id="ai-base-url" type="text" placeholder="https://api.openai.com/v1" />
+      </div>
+      <div class="setting-row">
+        <span>模型</span>
+        <input id="ai-model" type="text" placeholder="gpt-4o-mini" />
+      </div>
+      <div class="setting-row">
+        <span>API Key</span>
+        <input id="ai-api-key" type="password" placeholder="sk-..." />
+      </div>
+      <div class="setting-row">
+        <span>所在城市</span>
+        <input id="ai-local-city" type="text" placeholder="如：杭州" />
+      </div>
+      <div class="setting-row">
+        <span>具体位置</span>
+        <input id="ai-local-location" type="text" placeholder="可选，如：滨江区" />
+      </div>
+      <div id="settings-actions">
+        <button id="ai-save" type="button">保存</button>
+        <button id="ai-detail" type="button">详细配置</button>
+        <button id="ai-test" type="button">测试连接</button>
+      </div>
+      <div class="sys-row" id="ai-test-result">未测试</div>
+    </div>
+    <div id="passive-panel" class="tool-panel">
+      <div class="panel-title">
+        被动对话
+        <button class="panel-close" data-close="passive-panel" type="button">×</button>
+      </div>
+      <div class="toggle-row">
+        <label><input id="passive-enabled" type="checkbox" /> 启用</label>
+      </div>
+      <div class="toggle-row">
+        <label><input id="passive-random-enabled" type="checkbox" /> 随机闲聊</label>
+        <input id="passive-interval" type="number" min="5" max="240" />
+      </div>
+      <div class="toggle-row">
+        <label><input id="passive-blessing-enabled" type="checkbox" /> 早晚祝福</label>
+      </div>
+      <div class="toggle-row">
+        <label><input id="passive-focus-enabled" type="checkbox" /> 专注播报</label>
+        <input id="passive-focus-interval" type="number" min="10" max="240" />
+      </div>
+    </div>
+    <div id="more-info-panel" class="tool-panel">
+      <div class="panel-title">
+        更多信息
+        <button class="panel-close" data-close="more-info-panel" type="button">×</button>
+      </div>
+      <div class="info-row"><span class="info-label">状态</span><span id="info-status">-</span></div>
+      <div class="info-row"><span class="info-label">今日专注</span><span id="info-focus">-</span></div>
+      <div class="info-row"><span class="info-label">好感度</span><span id="info-favor">-</span></div>
+      <div class="info-row"><span class="info-label">AI 状态</span><span id="info-ai-status">未测试</span></div>
+      <div class="info-row"><span class="info-label">AI 模型</span><span id="info-ai-model">-</span></div>
+      <div class="info-row"><span class="info-label">番茄钟</span><span id="info-pomodoro">-</span></div>
+      <div class="info-row"><span class="info-label">阈值(秒)</span><span id="info-thresholds">-</span></div>
+      <div class="info-row"><span class="info-label">透明度</span><span id="info-opacity">-</span></div>
+      <div class="info-row"><span class="info-label">模型缩放</span><span id="info-model-scale">-</span></div>
+      <div id="settings-actions">
+        <button id="favor-reset" type="button">重置好感度</button>
+      </div>
+      <div class="info-row"><span class="info-label">CPU</span><span id="info-cpu">-</span></div>
+      <div class="info-row"><span class="info-label">内存</span><span id="info-mem">-</span></div>
+      <div class="info-row"><span class="info-label">网速</span><span id="info-net">-</span></div>
+      <div class="info-row"><span class="info-label">电量</span><span id="info-battery">-</span></div>
+    </div>
+
+    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+    <script src="./js/live2d.core.min.js"></script>
+    <script src="./js/pixi.min.js"></script>
+    <script src="./js/live2d.min.js"></script>
+    <script src="./js/app.js"></script>
+  </body>
+</html>
