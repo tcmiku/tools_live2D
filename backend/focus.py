@@ -82,7 +82,7 @@ class FocusEngine:
         self._last_window_title: str = ""
         self._switch_times: deque[float] = deque(maxlen=10)
         self._last_typing_hint = 0.0
-        self._last_idle_hint = 0.0
+        self._last_idle_hint: float | None = None
         self._last_switch_hint = 0.0
         self._last_browser_hint = 0.0
 
@@ -151,9 +151,10 @@ class FocusEngine:
             self._last_typing_hint = now
             events.append("typing")
 
-        if state.status == "sleep" and now - self._last_idle_hint > 300:
-            self._last_idle_hint = now
-            events.append("idle")
+        if state.status == "sleep":
+            if self._last_idle_hint is None or now - self._last_idle_hint > 300:
+                self._last_idle_hint = now
+                events.append("idle")
 
         while self._switch_times and now - self._switch_times[0] > 20:
             self._switch_times.popleft()

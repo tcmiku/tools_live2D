@@ -67,6 +67,7 @@ class AppSettings:
             "model_y": 0.65,
             "model_x_offset": 0.0,
             "model_y_offset": 0.0,
+            "model_path": "model/miku/miku.model3.json",
             "ui_scale": 1.0,
             "animation_speed": 1.0,
             "pomodoro_focus_min": 25,
@@ -105,6 +106,8 @@ class AppSettings:
             "hotkey_pomodoro": "Ctrl+Shift+T",
             "last_login_date": "",
             "login_streak": 0,
+            "model_edit_mode": False,
+            "bindings_path": "data/model_bindings.json",
         }
         stored = self._data.get("settings", {})
         if not isinstance(stored, dict):
@@ -151,15 +154,27 @@ class AppSettings:
         providers = data.get("ai_providers")
         if isinstance(providers, list) and providers:
             normalized = []
+            fallback_key = str(data.get("ai_api_key", "")).strip()
+            fallback_url = str(data.get("ai_base_url", "https://api.openai.com/v1")).strip()
+            fallback_model = str(data.get("ai_model", "gpt-4o-mini")).strip()
+            default_url = "https://api.openai.com/v1"
+            default_model = "gpt-4o-mini"
             for item in providers:
                 if not isinstance(item, dict):
                     continue
+                api_key = str(item.get("api_key", "")).strip() or fallback_key
+                base_url = str(item.get("base_url", "")).strip() or fallback_url
+                model = str(item.get("model", "")).strip() or fallback_model
+                if fallback_url and base_url == default_url:
+                    base_url = fallback_url
+                if fallback_model and model == default_model:
+                    model = fallback_model
                 normalized.append(
                     {
                         "name": str(item.get("name", "OpenAI兼容")),
-                        "base_url": str(item.get("base_url", "https://api.openai.com/v1")),
-                        "model": str(item.get("model", "gpt-4o-mini")),
-                        "api_key": str(item.get("api_key", "")),
+                        "base_url": base_url,
+                        "model": model,
+                        "api_key": api_key,
                         "enabled": bool(item.get("enabled", True)),
                     }
                 )

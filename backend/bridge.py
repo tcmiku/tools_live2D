@@ -12,6 +12,7 @@ from PySide6.QtCore import QObject, Signal, Slot, QPoint
 from focus import FocusState
 from ai_client import AIClient
 from settings import AppSettings
+from model_bindings import ModelBindingManager, MotionBinding
 from clipboard import ClipboardHistory
 from notes import NoteStore
 from sysinfo import SystemInfo
@@ -34,9 +35,12 @@ class BackendBridge(QObject):
     aiTestResult = Signal(dict)
     favorUpdated = Signal(int)
     openPanel = Signal(str)
+    modelEditModeChanged = Signal(bool)
     backupCompleted = Signal(str)
     restoreCompleted = Signal(str)
     requestBackupDialog = Signal()
+    bindingsUpdated = Signal(dict)
+    bindingPreview = Signal(str, str)
 
     def __init__(
         self,
@@ -45,6 +49,7 @@ class BackendBridge(QObject):
         pomodoro: PomodoroEngine | None = None,
         reminders: ReminderEngine | None = None,
         reminder_store: ReminderStore | None = None,
+        binding_manager: ModelBindingManager | None = None,
     ) -> None:
         super().__init__()
         self._ai_client = ai_client
@@ -59,6 +64,7 @@ class BackendBridge(QObject):
         self._reminders = reminders
         self._reminder_store = reminder_store
         self._open_ai_dialog = None
+        self._binding_manager = binding_manager
         self._last_state: Dict[str, object] = {
             "status": "idle",
             "idle_ms": 0,
@@ -133,6 +139,8 @@ class BackendBridge(QObject):
     @Slot()
     def endWindowDrag(self) -> None:
         self._drag_last = None
+        if self._window and hasattr(self._window, "snap_to_edges"):
+            self._window.snap_to_edges()
 
     @Slot(result=dict)
     def getModelConfig(self) -> dict:
@@ -143,6 +151,85 @@ class BackendBridge(QObject):
         self._settings.set_model_config(config)
         logging.info("model config updated: %s", config)
         self.settingsUpdated.emit(self._settings.get_settings())
+
+    @Slot(str, result=dict)
+    def getModelBindings(self, model_path: str) -> dict:
+        if not self._binding_manager:
+            return {}
+        return self._binding_manager.get_model(model_path)
+
+    @Slot(str, str, str, str, str)
+    def setBinding(self, model_path: str, category: str, key: str, motion: str, expression: str) -> None:
+        if not self._binding_manager:
+            return
+        binding = MotionBinding(motion or None, expression or None)
+        self._binding_manager.set_binding(model_path, category, key, binding)
+        self.bindingsUpdated.emit(self._binding_manager.get_model(model_path))
+
+    @Slot(str)
+    def resetModelBindings(self, model_path: str) -> None:
+        if not self._binding_manager:
+            return
+        self._binding_manager.reset_model(model_path)
+        self.bindingsUpdated.emit(self._binding_manager.get_model(model_path))
+
+    @Slot(result=dict)
+    def getAvailablePresets(self) -> dict:
+        if not self._binding_manager:
+            return {}
+        return self._binding_manager.get_presets()
+
+    @Slot(str, str)
+    def applyPreset(self, model_path: str, preset_name: str) -> None:
+        if not self._binding_manager:
+            return
+        if self._binding_manager.apply_preset(model_path, preset_name):
+            self.bindingsUpdated.emit(self._binding_manager.get_model(model_path))
+
+    @Slot(str, str, str)
+    def previewBinding(self, model_path: str, category: str, key: str) -> None:
+        if not self._binding_manager:
+            return
+        binding = self._binding_manager.get_binding(model_path, category, key)
+        self.bindingPreview.emit(binding.motion or "", binding.expression or "")
+
+    @Slot(str, result=dict)
+    def exportPreset(self, model_path: str) -> dict:
+        if not self._binding_manager:
+            return {}
+        return self._binding_manager.export_preset(model_path)
+
+    @Slot(str, str)
+    def savePreset(self, model_path: str, preset_name: str) -> None:
+        if not self._binding_manager:
+            return
+        if self._binding_manager.save_preset(model_path, preset_name):
+            self.bindingsUpdated.emit(self._binding_manager.get_model(model_path))
+
+    @Slot(result=list)
+    def getAvailableModels(self) -> list:
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        web_dir = os.path.join(base_dir, "web")
+        model_root = os.path.join(web_dir, "model")
+        results = []
+        if not os.path.isdir(model_root):
+            return results
+        for root, _dirs, files in os.walk(model_root):
+            for filename in files:
+                if not (filename.endswith(".model3.json") or filename.endswith(".model.json")):
+                    continue
+                full_path = os.path.join(root, filename)
+                rel_path = os.path.relpath(full_path, web_dir).replace(os.sep, "/")
+                name = os.path.basename(root)
+                results.append({"name": name, "path": rel_path})
+        results.sort(key=lambda item: item.get("name", ""))
+        return results
+
+    @Slot(bool)
+    def setModelEditMode(self, enabled: bool) -> None:
+        self._settings.set_settings({"model_edit_mode": enabled})
+        self.modelEditModeChanged.emit(enabled)
+        logging.info("model edit mode: %s", enabled)
 
     @Slot(result=dict)
     def getSettings(self) -> dict:
@@ -318,8 +405,6 @@ class BackendBridge(QObject):
 
     @Slot(str)
     def createBackup(self, target_path: str = "") -> None:
-        if not self._window:
-            return
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         data_dir = os.path.join(base_dir, "data")
         try:

@@ -46,17 +46,19 @@ class PomodoroEngine:
         except Exception as exc:
             logging.exception("pomodoro save failed: %s", exc)
 
-    def _today_key(self) -> str:
-        return date.today().isoformat()
+    def _today_key(self, now: float | None = None) -> str:
+        if now is None:
+            now = time.time()
+        return time.strftime("%Y-%m-%d", time.localtime(now))
 
-    def _inc_today(self) -> None:
-        key = self._today_key()
+    def _inc_today(self, now: float | None = None) -> None:
+        key = self._today_key(now)
         current = int(self._count_data.get(key, 0))
         self._count_data[key] = current + 1
         self._save_counts()
 
-    def get_count_today(self) -> int:
-        return int(self._count_data.get(self._today_key(), 0))
+    def get_count_today(self, now: float | None = None) -> int:
+        return int(self._count_data.get(self._today_key(now), 0))
 
     def get_count_by_date(self, date_str: str) -> int:
         return int(self._count_data.get(date_str, 0))
@@ -115,12 +117,14 @@ class PomodoroEngine:
         if self._last_tick is None:
             self._last_tick = now
         delta = int(now - self._last_tick)
+        if delta < 0 or delta > 3600:
+            delta = 0
         if delta > 0:
             self._last_tick = now
             if self._mode in ("focus", "break") and self._remaining_sec > 0:
                 self._remaining_sec = max(0, self._remaining_sec - delta)
             if self._mode == "focus" and self._remaining_sec == 0:
-                self._inc_today()
+                self._inc_today(now)
                 self._mode = "break"
                 self._remaining_sec = self.break_min * 60
             elif self._mode == "break" and self._remaining_sec == 0:
@@ -131,7 +135,7 @@ class PomodoroEngine:
             remaining_sec=int(self._remaining_sec),
             focus_min=self.focus_min,
             break_min=self.break_min,
-            count_today=self.get_count_today(),
+            count_today=self.get_count_today(now),
         )
 
 

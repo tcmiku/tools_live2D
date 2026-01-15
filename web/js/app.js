@@ -7,6 +7,26 @@ let live2dApp = null;
 let live2dModel = null;
 let animationSpeed = 1.0;
 let motionGroups = ["Tap", "Flick", "Flick3", "Idle"];
+let expressionNames = [];
+const bindingCategories = {
+  mood: ["开心", "愉快", "平静", "低落", "孤独"],
+  status: ["active", "idle", "sleep", "paused"],
+  pomodoro: ["focus", "break", "completed"],
+  ai: ["greeting", "cheer", "reminder", "farewell"],
+  interaction: ["click", "petting", "drag"],
+};
+let bindingState = {
+  model_path: "",
+  name: "",
+  bindings: {},
+  default: { motion: "Idle", expression: null },
+};
+let bindingActiveCategory = "mood";
+let bindingSelectedKey = null;
+let bindingLoopTimer = null;
+let presetState = {};
+let modelLoadSeq = 0;
+let modelLoading = false;
 const modelConfig = {
   scale: 0.35,
   x: 0.6,
@@ -23,6 +43,8 @@ let settingsState = {
   model_y: 0.65,
   model_x_offset: 0.0,
   model_y_offset: 0.0,
+  model_edit_mode: false,
+  model_path: "model/miku/miku.model3.json",
   ui_scale: 1.0,
   animation_speed: 1.0,
   pomodoro_focus_min: 25,
@@ -44,6 +66,7 @@ let settingsState = {
   passive_focus_enabled: true,
   passive_focus_interval_min: 60,
   local_city: "",
+  local_location: "",
   local_location: "",
   favor: 50,
   mood: 60,
@@ -76,6 +99,16 @@ let lastAiTestStatus = "未测试";
 let bubbleTimer = null;
 let bubbleText = "";
 let toolbarHideTimer = null;
+let modelEditModeEnabled = false;
+let modelDragState = {
+  active: false,
+  startX: 0,
+  startY: 0,
+  startXOffset: 0,
+  startYOffset: 0,
+};
+let modelOptions = [];
+let currentModelIndex = 0;
 
 function appendChatMessage(who, text) {
   const box = document.getElementById("chat-box");
@@ -84,6 +117,214 @@ function appendChatMessage(who, text) {
   msg.textContent = text;
   box.appendChild(msg);
   box.scrollTop = box.scrollHeight;
+}
+
+function getBindingValue(category, key) {
+  const cat = bindingState.bindings?.[category];
+  if (cat && typeof cat === "object" && cat[key]) {
+    return cat[key];
+  }
+  return { motion: null, expression: null };
+}
+
+function updateBindingModelName() {
+  const badge = document.getElementById("binding-model-name");
+  if (!badge) return;
+  badge.textContent = bindingState.name || "-";
+}
+
+function renderBindingGrid() {
+  const grid = document.getElementById("binding-grid");
+  if (!grid) return;
+  const keys = bindingCategories[bindingActiveCategory] || [];
+  const motions = ["", ...motionGroups];
+  const expressions = ["", ...expressionNames];
+  grid.innerHTML = "";
+  keys.forEach((key) => {
+    const binding = getBindingValue(bindingActiveCategory, key);
+    const row = document.createElement("div");
+    row.className = "binding-row";
+    if (bindingSelectedKey === key) {
+      row.classList.add("active");
+    }
+    const label = document.createElement("label");
+    label.textContent = key;
+    const motionSelect = document.createElement("select");
+    motions.forEach((name) => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name || "无动作";
+      if ((binding.motion || "") === name) opt.selected = true;
+      motionSelect.appendChild(opt);
+    });
+    const exprSelect = document.createElement("select");
+    expressions.forEach((name) => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name || "无表情";
+      if ((binding.expression || "") === name) opt.selected = true;
+      exprSelect.appendChild(opt);
+    });
+    motionSelect.addEventListener("change", () => {
+      saveBinding(bindingActiveCategory, key, motionSelect.value, exprSelect.value);
+    });
+    exprSelect.addEventListener("change", () => {
+      saveBinding(bindingActiveCategory, key, motionSelect.value, exprSelect.value);
+    });
+    row.addEventListener("click", () => {
+      bindingSelectedKey = key;
+      renderBindingGrid();
+    });
+    row.appendChild(label);
+    row.appendChild(motionSelect);
+    row.appendChild(exprSelect);
+    grid.appendChild(row);
+  });
+}
+
+function syncBindingPanel() {
+  updateBindingModelName();
+  renderBindingGrid();
+}
+
+function saveBinding(category, key, motion, expression) {
+  if (!bindingState.model_path || !backend || typeof backend.setBinding !== "function") return;
+  backend.setBinding(bindingState.model_path, category, key, motion, expression);
+}
+
+function syncBindingsFromBackend() {
+  if (!backend || typeof backend.getModelBindings !== "function") return;
+  const modelPath = settingsState.model_path || "";
+  if (!modelPath) return;
+  backend.getModelBindings(modelPath, (data) => {
+    if (!data) return;
+    bindingState = data;
+    bindingState.model_path = modelPath;
+    syncBindingPanel();
+  });
+  refreshPresetList();
+}
+
+function refreshPresetList() {
+  if (!backend || typeof backend.getAvailablePresets !== "function") return;
+  backend.getAvailablePresets((data) => {
+    presetState = data || {};
+  });
+}
+
+function openPresetDialog() {
+  const dialog = document.getElementById("preset-dialog");
+  const list = document.getElementById("preset-list");
+  if (!dialog || !list) return;
+  list.innerHTML = "";
+  Object.keys(presetState || {}).forEach((name) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = presetState[name]?.name || name;
+    btn.addEventListener("click", () => {
+      if (backend && typeof backend.applyPreset === "function") {
+        backend.applyPreset(bindingState.model_path || "", name);
+      }
+      dialog.style.display = "none";
+    });
+    list.appendChild(btn);
+  });
+  dialog.style.display = "flex";
+  dialog.addEventListener(
+    "click",
+    (event) => {
+      if (event.target === dialog) {
+        dialog.style.display = "none";
+      }
+    },
+    { once: true }
+  );
+}
+
+function exportPreset() {
+  if (!backend || typeof backend.exportPreset !== "function") return;
+  backend.exportPreset(bindingState.model_path || "", (data) => {
+    if (!data) return;
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${bindingState.name || "preset"}.preset.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
+function previewBinding(selectedKey) {
+  if (!backend || typeof backend.previewBinding !== "function") return;
+  const key = selectedKey || bindingSelectedKey || (bindingCategories[bindingActiveCategory] || [])[0];
+  if (!key) return;
+  backend.previewBinding(bindingState.model_path || "", bindingActiveCategory, key);
+}
+
+function triggerBinding(category, key) {
+  const binding = getBindingValue(category, key);
+  if (!binding) return;
+  if (binding.motion) {
+    triggerMotion(binding.motion);
+  }
+  if (binding.expression) {
+    triggerExpression(binding.expression);
+  }
+}
+
+function setupBindingPanel() {
+  const panel = document.getElementById("binding-panel");
+  if (!panel) return;
+  panel.querySelectorAll(".tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      panel.querySelectorAll(".tab").forEach((el) => el.classList.remove("active"));
+      tab.classList.add("active");
+      bindingActiveCategory = tab.getAttribute("data-tab") || "mood";
+      renderBindingGrid();
+    });
+  });
+  const previewBtn = document.getElementById("preview-btn");
+  const loopBtn = document.getElementById("loop-btn");
+  const stopBtn = document.getElementById("stop-btn");
+  const applyBtn = document.getElementById("apply-preset-btn");
+  const savePresetBtn = document.getElementById("save-preset-btn");
+  const exportBtn = document.getElementById("export-btn");
+  const resetBtn = document.getElementById("reset-btn");
+  if (previewBtn) previewBtn.addEventListener("click", () => previewBinding());
+  if (loopBtn) {
+    loopBtn.addEventListener("click", () => {
+      if (bindingLoopTimer) return;
+      previewBinding();
+      bindingLoopTimer = setInterval(() => previewBinding(), 1500);
+    });
+  }
+  if (stopBtn) {
+    stopBtn.addEventListener("click", () => {
+      if (bindingLoopTimer) {
+        clearInterval(bindingLoopTimer);
+        bindingLoopTimer = null;
+      }
+    });
+  }
+  if (applyBtn) applyBtn.addEventListener("click", () => openPresetDialog());
+  if (savePresetBtn) {
+    savePresetBtn.addEventListener("click", () => {
+      if (!backend || typeof backend.savePreset !== "function") return;
+      const name = window.prompt("预设名称", bindingState.name || "新预设");
+      if (!name) return;
+      backend.savePreset(bindingState.model_path || "", name.trim());
+      refreshPresetList();
+    });
+  }
+  if (exportBtn) exportBtn.addEventListener("click", () => exportPreset());
+  if (resetBtn) {
+    resetBtn.addEventListener("click", () => {
+      if (backend && typeof backend.resetModelBindings === "function") {
+        backend.resetModelBindings(bindingState.model_path || "");
+      }
+    });
+  }
 }
 
 function showSpeechBubble(text, durationMs = 4000) {
@@ -220,6 +461,80 @@ function updateMoveButton(enabled) {
   button.textContent = enabled ? "移动中" : "移动";
 }
 
+function updateModelEditToggle() {
+  const button = document.getElementById("model-edit-toggle");
+  if (!button) return;
+  const enabled = Boolean(settingsState.model_edit_mode);
+  button.textContent = enabled ? "关闭" : "开启";
+  button.classList.toggle("active", enabled);
+}
+
+function getModelPath() {
+  return settingsState.model_path || "model/miku/miku.model3.json";
+}
+
+function getModelUrl(path) {
+  return new URL(path, window.location.href).toString();
+}
+
+function updateModelSwitchButton() {
+  const button = document.getElementById("tool-model-switch");
+  if (!button) return;
+  const hasOptions = modelOptions.length > 1;
+  button.disabled = !hasOptions || modelLoading;
+  if (modelOptions.length > 0) {
+    const current = modelOptions[currentModelIndex] || modelOptions[0];
+    button.title = current ? `当前模型：${current.name || current.path}` : "切换模型";
+  } else {
+    button.title = "切换模型";
+  }
+}
+
+function setModelOptions(list) {
+  modelOptions = Array.isArray(list) ? list : [];
+  if (modelOptions.length === 0) {
+    modelOptions = [{ name: "默认模型", path: getModelPath() }];
+  }
+  const path = getModelPath();
+  const matchIndex = modelOptions.findIndex((item) => item.path === path);
+  currentModelIndex = matchIndex >= 0 ? matchIndex : 0;
+  updateModelSwitchButton();
+}
+
+function syncModelOptionsFromBackend() {
+  if (!backend || typeof backend.getAvailableModels !== "function") {
+    setModelOptions([]);
+    return;
+  }
+  backend.getAvailableModels((list) => {
+    setModelOptions(list || []);
+  });
+}
+
+async function switchModel() {
+  if (modelLoading) return;
+  if (modelOptions.length <= 1) {
+    logStatus("没有可切换的模型");
+    return;
+  }
+  const nextIndex = (currentModelIndex + 1) % modelOptions.length;
+  const nextModel = modelOptions[nextIndex];
+  if (!nextModel?.path) return;
+  const ok = await loadLive2DModelFromUrl(getModelUrl(nextModel.path));
+  if (!ok) {
+    logStatus("模型切换失败");
+    return;
+  }
+  currentModelIndex = nextIndex;
+  settingsState.model_path = nextModel.path;
+  if (backend && typeof backend.setSettings === "function") {
+    backend.setSettings({ model_path: nextModel.path });
+  }
+  applySettings({ model_path: nextModel.path });
+  updateModelSwitchButton();
+  logStatus(`切换模型：${nextModel.name || nextModel.path}`);
+}
+
 function setMoveMode(enabled) {
   moveModeEnabled = enabled;
   updateMoveButton(moveModeEnabled);
@@ -286,7 +601,8 @@ function setupContextMenu() {
   const aiItem = document.getElementById("context-ai");
   const passiveItem = document.getElementById("context-passive");
   const moreInfoItem = document.getElementById("context-more-info");
-  if (!menu || !settingsItem || !chatToggle || !toolsItem || !pomoItem || !reminderItem || !aiItem || !passiveItem || !moreInfoItem) return;
+  const bindingsItem = document.getElementById("context-bindings");
+  if (!menu || !settingsItem || !chatToggle || !toolsItem || !pomoItem || !reminderItem || !aiItem || !passiveItem || !moreInfoItem || !bindingsItem) return;
 
   document.addEventListener("contextmenu", (event) => {
     event.preventDefault();
@@ -336,6 +652,12 @@ function setupContextMenu() {
     toggleToolPanel("more-info-panel");
   });
 
+  bindingsItem.addEventListener("click", (event) => {
+    event.stopPropagation();
+    menu.classList.remove("visible");
+    toggleToolPanel("binding-panel");
+  });
+
   settingsItem.addEventListener("click", (event) => {
     event.stopPropagation();
     menu.classList.remove("visible");
@@ -361,6 +683,38 @@ function setupPanelCloseButtons() {
         panel.classList.remove("visible");
       }
     });
+  });
+}
+
+function closeAllPanels() {
+  const panelIds = [
+    "tools-panel",
+    "note-panel",
+    "clipboard-panel",
+    "sysinfo-panel",
+    "settings-panel",
+    "pomodoro-panel",
+    "reminder-panel",
+    "todo-panel",
+    "ai-panel",
+    "passive-panel",
+    "more-info-panel",
+    "binding-panel",
+  ];
+  panelIds.forEach((panelId) => {
+    const panel = document.getElementById(panelId);
+    if (panel) panel.classList.remove("visible");
+  });
+  const menu = document.getElementById("context-menu");
+  if (menu) menu.classList.remove("visible");
+  setPanelCollapsed(true);
+}
+
+function setupGlobalShortcuts() {
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    closeAllPanels();
   });
 }
 
@@ -415,6 +769,7 @@ function toggleToolPanel(id) {
     "ai-panel",
     "passive-panel",
     "more-info-panel",
+    "binding-panel",
   ];
   panels.forEach((panelId) => {
     const panel = document.getElementById(panelId);
@@ -455,6 +810,8 @@ function setupToolsPanel() {
   const noteBtn = document.getElementById("tool-note");
   const clipboardBtn = document.getElementById("tool-clipboard");
   const sysBtn = document.getElementById("tool-sysinfo");
+  const modelSwitchBtn = document.getElementById("tool-model-switch");
+  const bindingBtn = document.getElementById("tool-bindings");
   if (noteBtn) {
     noteBtn.addEventListener("click", () => toggleToolPanel("note-panel"));
   }
@@ -463,6 +820,14 @@ function setupToolsPanel() {
   }
   if (sysBtn) {
     sysBtn.addEventListener("click", () => toggleToolPanel("sysinfo-panel"));
+  }
+  if (modelSwitchBtn) {
+    modelSwitchBtn.addEventListener("click", () => {
+      switchModel();
+    });
+  }
+  if (bindingBtn) {
+    bindingBtn.addEventListener("click", () => toggleToolPanel("binding-panel"));
   }
 }
 
@@ -1000,8 +1365,8 @@ function drawEye(ctx, x, y, w, h) {
 function drawPet(ctx, width, height, t) {
   const pulse = performance.now() < clickPulseUntil ? 1.06 : 1.0;
   const baseSize = Math.min(width, height) * 0.42 * pulse;
-  const x = width * 0.58;
-  const y = height * 0.58 + Math.sin(t / 600) * 6;
+  const x = width * modelConfig.x + modelConfig.xOffset;
+  const y = height * modelConfig.y + modelConfig.yOffset + Math.sin(t / 600) * 6;
   const color = statusColor(currentState.status);
 
   ctx.clearRect(0, 0, width, height);
@@ -1060,13 +1425,18 @@ function animatePlaceholder(t) {
 
 function positionLive2D() {
   if (!live2dApp || !live2dModel) return;
-  const scale = clamp(modelConfig.scale, 0.1, 2.0);
   live2dModel.position.set(
     live2dApp.renderer.width * modelConfig.x + modelConfig.xOffset,
     live2dApp.renderer.height * modelConfig.y + modelConfig.yOffset
   );
-  live2dModel.scale.set(scale);
+  applyModelScale();
   updateSpeechBubblePosition();
+}
+
+function applyModelScale() {
+  if (!live2dModel) return;
+  const scale = clamp(modelConfig.scale, 0.1, 2.0);
+  live2dModel.scale.set(scale);
 }
 
 function clamp(value, min, max) {
@@ -1099,7 +1469,8 @@ function setupModelInteraction() {
   if (!canvas) return;
 
   canvas.addEventListener("mousedown", (event) => {
-    if (moveModeEnabled) {
+    // 编辑模式下的拖动由 setupModelEditMode 处理
+    if (modelEditModeEnabled || moveModeEnabled) {
       return;
     }
     setDragBlocker("model", isPointerOverModel(event));
@@ -1107,6 +1478,77 @@ function setupModelInteraction() {
 
   window.addEventListener("mouseup", () => {
     setDragBlocker("model", false);
+  });
+}
+
+function setupModelEditMode() {
+  const canvas = document.getElementById("canvas");
+  if (!canvas) return;
+
+  canvas.addEventListener("wheel", (event) => {
+    if (!modelEditModeEnabled) return;
+
+    event.preventDefault();
+
+    if (usePlaceholder) {
+      const delta = event.deltaY > 0 ? -0.02 : 0.02;
+      const rect = canvas.getBoundingClientRect();
+      const currentScale = (settingsState.model_scale || 0.35);
+      const newScale = clamp(currentScale + delta, 0.1, 2.0);
+      settingsState.model_scale = newScale;
+      applySettings({ model_scale: newScale });
+    } else if (live2dModel) {
+      const delta = event.deltaY > 0 ? -0.02 : 0.02;
+      modelConfig.scale = clamp(modelConfig.scale + delta, 0.1, 2.0);
+      settingsState.model_scale = modelConfig.scale;
+      applyModelScale();
+      scheduleSaveModelConfig();
+      logStatus(`模型缩放：${modelConfig.scale.toFixed(2)}`);
+    }
+  }, { passive: false });
+
+  canvas.addEventListener("mousedown", (event) => {
+    if (!modelEditModeEnabled || event.button !== 0) return;
+
+    if (isPointerOverPlaceholder(event) || isPointerOverModel(event)) {
+      modelDragState.active = true;
+      modelDragState.startX = event.clientX;
+      modelDragState.startY = event.clientY;
+      modelDragState.startXOffset = modelConfig.xOffset;
+      modelDragState.startYOffset = modelConfig.yOffset;
+      event.preventDefault();
+      event.stopPropagation();
+      triggerBinding("interaction", "drag");
+    }
+  });
+
+  window.addEventListener("mousemove", (event) => {
+    if (!modelEditModeEnabled || !modelDragState.active) return;
+
+    const canvas = document.getElementById("canvas");
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = live2dApp ? live2dApp.renderer.width / rect.width : 1;
+    const scaleY = live2dApp ? live2dApp.renderer.height / rect.height : 1;
+
+    const deltaX = (event.clientX - modelDragState.startX) * scaleX;
+    const deltaY = (event.clientY - modelDragState.startY) * scaleY;
+
+    modelConfig.xOffset = modelDragState.startXOffset + deltaX;
+    modelConfig.yOffset = modelDragState.startYOffset + deltaY;
+
+    if (!usePlaceholder && live2dModel) {
+      positionLive2D();
+    }
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (modelDragState.active) {
+      modelDragState.active = false;
+      settingsState.model_x_offset = modelConfig.xOffset;
+      settingsState.model_y_offset = modelConfig.yOffset;
+      scheduleSaveModelConfig();
+    }
   });
 }
 
@@ -1139,7 +1581,29 @@ function triggerRandomMotion() {
   if (!live2dModel) return false;
   const groups = motionGroups.length ? motionGroups : ["Tap", "Flick", "Idle"];
   const group = groups[Math.floor(Math.random() * groups.length)];
-  return triggerMotion(group);
+  if (triggerMotion(group)) {
+    return true;
+  }
+  if (expressionNames.length > 0) {
+    const expr = expressionNames[Math.floor(Math.random() * expressionNames.length)];
+    return triggerExpression(expr);
+  }
+  return false;
+}
+
+function triggerExpression(name) {
+  if (!live2dModel || !name) return false;
+  if (typeof live2dModel.expression === "function") {
+    live2dModel.expression(name);
+    return true;
+  }
+  const internal = live2dModel.internalModel;
+  const manager = internal?.motionManager?.expressionManager;
+  if (manager && typeof manager.setExpression === "function") {
+    manager.setExpression(name);
+    return true;
+  }
+  return false;
 }
 
 function triggerMotion(group) {
@@ -1177,10 +1641,19 @@ async function loadMotionGroups(modelUrl) {
     const motions = data?.FileReferences?.Motions;
     if (motions && typeof motions === "object") {
       const keys = Object.keys(motions);
-      if (keys.length > 0) {
-        motionGroups = keys;
-      }
+      motionGroups = keys.length > 0 ? keys : [];
+    } else {
+      motionGroups = [];
     }
+    const expressions = data?.FileReferences?.Expressions;
+    if (Array.isArray(expressions)) {
+      expressionNames = expressions
+        .map((item) => item?.Name)
+        .filter((name) => typeof name === "string" && name.length > 0);
+    } else {
+      expressionNames = [];
+    }
+    renderBindingGrid();
   } catch (err) {
     console.warn("load motion groups failed:", err);
   }
@@ -1200,6 +1673,7 @@ function setupPetInteraction() {
       if (isPointerOverPlaceholder(event)) {
         triggerPlaceholderClick();
         createSpark(event.clientX, event.clientY);
+        triggerBinding("interaction", "click");
       }
       return;
     }
@@ -1207,6 +1681,7 @@ function setupPetInteraction() {
       if (triggerRandomMotion()) {
         createSpark(event.clientX, event.clientY);
       }
+      triggerBinding("interaction", "click");
     }
   });
 
@@ -1219,6 +1694,7 @@ function setupPetInteraction() {
         lastPettingTime = now;
         triggerPlaceholderClick();
         createSpark(event.clientX, event.clientY);
+        triggerBinding("interaction", "petting");
       }
       return;
     }
@@ -1226,6 +1702,7 @@ function setupPetInteraction() {
       lastPettingTime = now;
       triggerRandomMotion();
       createSpark(event.clientX, event.clientY);
+      triggerBinding("interaction", "petting");
     }
   });
 }
@@ -1264,51 +1741,88 @@ function setupWindowMoveInteraction() {
   });
 }
 
-async function tryLoadLive2DModel() {
-  const modelUrl = new URL("./model/miku/miku.model3.json", window.location.href).toString();
-
+async function loadLive2DModelFromUrl(modelUrl) {
+  const loadId = ++modelLoadSeq;
+  modelLoading = true;
+  updateModelSwitchButton();
   try {
     await loadMotionGroups(modelUrl);
     if (!window.Live2DCubismCore) {
-      logStatus("未加载 Live2D Core，请放置 live2d.core.min.js");
+      logStatus("未加载Live2D Core，请放置 live2d.core.min.js");
     }
     if (window.PIXI && window.PIXI.live2d && window.PIXI.live2d.Live2DModel) {
       const canvas = document.getElementById("canvas");
-      live2dApp = new window.PIXI.Application({
-        view: canvas,
-        backgroundAlpha: 0,
-        antialias: true,
-        autoStart: true,
-        resolution: window.devicePixelRatio || 1,
-      });
-      live2dModel = await window.PIXI.live2d.Live2DModel.from(modelUrl);
+      if (!live2dApp) {
+        live2dApp = new window.PIXI.Application({
+          view: canvas,
+          backgroundAlpha: 0,
+          antialias: true,
+          autoStart: true,
+          resolution: window.devicePixelRatio || 1,
+        });
+      }
+      if (live2dApp.stage && typeof live2dApp.stage.removeChildren === "function") {
+        live2dApp.stage.removeChildren();
+      }
+      if (live2dModel) {
+        live2dApp.stage.removeChild(live2dModel);
+        if (typeof live2dModel.destroy === "function") {
+          live2dModel.destroy({ children: true, texture: true, baseTexture: true });
+        }
+      }
+      const nextModel = await window.PIXI.live2d.Live2DModel.from(modelUrl);
+      if (loadId !== modelLoadSeq) {
+        if (typeof nextModel.destroy === "function") {
+          nextModel.destroy({ children: true, texture: true, baseTexture: true });
+        }
+        return false;
+      }
+      live2dModel = nextModel;
       live2dModel.anchor.set(0.5, 0.5);
       live2dApp.stage.addChild(live2dModel);
       positionLive2D();
       applyAnimationSpeed();
-      applySettings(settingsState);
-      syncSettingsFromBackend();
-      window.modelConfig = modelConfig;
-      window.applyModelTransform = positionLive2D;
-      setupModelInteraction();
-      logStatus("已加载 Live2D 模型");
+      logStatus("已加载Live2D 模型");
+      modelLoading = false;
+      updateModelSwitchButton();
       return true;
     }
 
     if (typeof window.loadLive2D === "function") {
+      if (loadId !== modelLoadSeq) return false;
       window.loadLive2D("canvas", modelUrl);
-      logStatus("已加载 Live2D 模型");
+      logStatus("已加载Live2D 模型");
+      modelLoading = false;
+      updateModelSwitchButton();
       return true;
     }
   } catch (err) {
     console.warn("Live2D load failed:", err);
     logStatus(`模型加载失败：${err}`);
+    modelLoading = false;
+    updateModelSwitchButton();
     return false;
   }
 
   logStatus("未检测到 Live2D SDK，仍使用占位模型");
-
+  modelLoading = false;
+  updateModelSwitchButton();
   return false;
+}
+
+async function tryLoadLive2DModel() {
+
+  const modelUrl = getModelUrl(getModelPath());
+
+  const loaded = await loadLive2DModelFromUrl(modelUrl);
+  if (loaded) {
+    applySettings(settingsState);
+    syncSettingsFromBackend();
+    window.modelConfig = modelConfig;
+    window.applyModelTransform = positionLive2D;
+    setupModelInteraction();
+  }
+  return loaded;
 }
 
 async function initLive2D() {
@@ -1350,6 +1864,7 @@ function initWebChannel() {
       });
     }
     syncSettingsFromBackend();
+    syncModelOptionsFromBackend();
 
     if (backend.settingsUpdated) {
       backend.settingsUpdated.connect((data) => {
@@ -1419,6 +1934,18 @@ function initWebChannel() {
       });
     }
 
+    if (backend.modelEditModeChanged) {
+      backend.modelEditModeChanged.connect((enabled) => {
+        modelEditModeEnabled = Boolean(enabled);
+        settingsState.model_edit_mode = modelEditModeEnabled;
+        document.body.classList.toggle("model-edit-mode", modelEditModeEnabled);
+        setDragBlocker("model", modelEditModeEnabled);
+        updateModelEditToggle();
+        logStatus(modelEditModeEnabled ? "模型编辑模式已开启，可拖动和滚轮缩放" : "模型编辑模式已关闭");
+      });
+    }
+
+
     if (backend.aiTestResult) {
       backend.aiTestResult.connect((result) => {
         const target = document.getElementById("ai-test-result");
@@ -1435,6 +1962,25 @@ function initWebChannel() {
       backend.passiveMessage.connect((text) => {
         triggerMotionByMessage(text);
         showSpeechBubble(text);
+      });
+    }
+
+    if (backend.bindingPreview) {
+      backend.bindingPreview.connect((motion, expression) => {
+        if (motion) {
+          triggerMotion(motion);
+        }
+        if (expression) {
+          triggerExpression(expression);
+        }
+      });
+    }
+    if (backend.bindingsUpdated) {
+      backend.bindingsUpdated.connect((data) => {
+        if (!data) return;
+        bindingState = data;
+        bindingState.model_path = settingsState.model_path || "";
+        syncBindingPanel();
       });
     }
 
@@ -1468,11 +2014,13 @@ function initWebChannel() {
 
     loadNote();
     loadClipboard();
+    syncBindingsFromBackend();
   });
 }
 
 function applySettings(data) {
   if (!data) return;
+  const prevModelPath = settingsState.model_path;
   settingsState = { ...settingsState, ...data };
   modelConfig.scale = Number(settingsState.model_scale);
   modelConfig.x = Number(settingsState.model_x);
@@ -1483,7 +2031,7 @@ function applySettings(data) {
   document.body.style.setProperty("--ui-scale", String(settingsState.ui_scale || 1));
   positionLive2D();
   if (live2dModel) {
-    live2dModel.scale.set(clamp(modelConfig.scale, 0.1, 2.0));
+    applyModelScale();
     if (typeof live2dModel.update === "function") {
       live2dModel.update(0);
     }
@@ -1496,6 +2044,21 @@ function applySettings(data) {
   syncAIConfig();
   syncPassivePanel();
   syncMoreInfoPanel();
+  if (data.model_path !== undefined && data.model_path !== prevModelPath) {
+    syncBindingsFromBackend();
+  }
+  if (data.model_path && data.model_path !== prevModelPath) {
+    loadLive2DModelFromUrl(getModelUrl(settingsState.model_path));
+    updateModelSwitchButton();
+  }
+  if (data.model_edit_mode !== undefined) {
+    modelEditModeEnabled = Boolean(data.model_edit_mode);
+    settingsState.model_edit_mode = modelEditModeEnabled;
+    document.body.classList.toggle("model-edit-mode", modelEditModeEnabled);
+    setDragBlocker("model", modelEditModeEnabled);
+    updateModelEditToggle();
+        logStatus(modelEditModeEnabled ? "模型编辑模式已开启，可拖动和滚轮缩放" : "模型编辑模式已关闭");
+  }
 }
 
 function applyAnimationSpeed() {
@@ -1546,6 +2109,7 @@ function syncSettingsPanel() {
   if (modelScale) modelScale.value = Number(settingsState.model_scale).toFixed(2);
   if (uiScale) uiScale.value = Number(settingsState.ui_scale).toFixed(2);
   if (animSpeed) animSpeed.value = Number(settingsState.animation_speed).toFixed(1);
+  updateModelEditToggle();
 }
 
 function setupSettingsPanel() {
@@ -1553,6 +2117,7 @@ function setupSettingsPanel() {
   const opacityValue = document.getElementById("opacity-value");
   const closeBtn = document.getElementById("settings-close");
   const saveBtn = document.getElementById("settings-save");
+  const modelEditToggle = document.getElementById("model-edit-toggle");
 
   if (opacityRange && opacityValue) {
     opacityRange.addEventListener("input", () => {
@@ -1586,6 +2151,7 @@ function setupSettingsPanel() {
         model_scale: Number(modelScale?.value || 0.35),
         ui_scale: Number(uiScale?.value || 1.0),
         animation_speed: Number(animSpeed?.value || 1.0),
+        model_edit_mode: Boolean(settingsState.model_edit_mode),
       };
 
       if (backend && typeof backend.setSettings === "function") {
@@ -1594,6 +2160,18 @@ function setupSettingsPanel() {
       applySettings(payload);
       const panel = document.getElementById("settings-panel");
       if (panel) panel.classList.remove("visible");
+    });
+  }
+
+  if (modelEditToggle) {
+    modelEditToggle.addEventListener("click", () => {
+      const next = !Boolean(settingsState.model_edit_mode);
+      if (backend && typeof backend.setModelEditMode === "function") {
+        backend.setModelEditMode(next);
+      } else if (backend && typeof backend.setSettings === "function") {
+        backend.setSettings({ model_edit_mode: next });
+      }
+      applySettings({ model_edit_mode: next });
     });
   }
 }
@@ -1730,6 +2308,7 @@ setupSettingsPanel();
 setupNotePanel();
 setupClipboardPanel();
 setupToolsPanel();
+setupBindingPanel();
 setupPomodoroPanel();
 setupReminderPanel();
 setupTodoPanel();
@@ -1740,9 +2319,11 @@ setupFavorReset();
 setupBackupRestore();
 setupQuickToolbar();
 setupPanelCloseButtons();
+setupGlobalShortcuts();
 setupPanelDrag();
 setupWindowMoveInteraction();
 initLive2D();
 initWebChannel();
 setupPetInteraction();
+setupModelEditMode();
 

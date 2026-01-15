@@ -230,8 +230,137 @@
         cursor: pointer;
         text-align: left;
       }
+      .tools-grid button .tool-icon {
+        display: inline-block;
+        margin-right: 6px;
+        font-size: 14px;
+        line-height: 1;
+        opacity: 0.8;
+      }
       .tools-grid button:hover {
         background: rgba(255, 255, 255, 0.08);
+      }
+      .tools-grid button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      #binding-panel {
+        width: 340px;
+      }
+      #binding-panel .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+      #binding-panel .panel-header h3 {
+        margin: 0;
+        font-size: 13px;
+      }
+      #binding-panel .model-badge {
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+      }
+      #binding-panel .tabs {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+      }
+      #binding-panel .tab {
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        cursor: pointer;
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+      }
+      #binding-panel .tab.active {
+        background: rgba(79, 134, 255, 0.35);
+        border-color: rgba(79, 134, 255, 0.7);
+      }
+      #binding-grid {
+        display: grid;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      .binding-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 6px;
+        align-items: center;
+        padding: 4px 6px;
+        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        cursor: pointer;
+      }
+      .binding-row.active {
+        border-color: rgba(79, 134, 255, 0.7);
+        background: rgba(79, 134, 255, 0.18);
+      }
+      .binding-row label {
+        font-size: 11px;
+      }
+      .binding-row select {
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #fff;
+        border-radius: 6px;
+        padding: 2px 6px;
+        font-size: 11px;
+      }
+      #binding-panel .preview-area,
+      #binding-panel .actions {
+        display: flex;
+        gap: 6px;
+        justify-content: flex-end;
+        margin-bottom: 6px;
+      }
+      #binding-panel .preview-area button,
+      #binding-panel .actions button {
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(0, 0, 0, 0.2);
+        color: #fff;
+        border-radius: 6px;
+        font-size: 11px;
+        padding: 3px 8px;
+        cursor: pointer;
+      }
+      #preset-dialog {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 9999;
+      }
+      #preset-dialog .modal-card {
+        background: rgba(20, 20, 24, 0.96);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+        padding: 12px;
+        width: 280px;
+      }
+      #preset-dialog h3 {
+        margin: 0 0 8px 0;
+        font-size: 13px;
+      }
+      #preset-list button {
+        width: 100%;
+        margin-bottom: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(0, 0, 0, 0.2);
+        color: #fff;
+        border-radius: 6px;
+        font-size: 11px;
+        padding: 4px 8px;
+        cursor: pointer;
+        text-align: left;
       }
       .toggle-row {
         display: flex;
@@ -397,6 +526,19 @@
         color: #fff;
         border-radius: 6px;
         padding: 2px 6px;
+      }
+      #model-edit-toggle {
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(0, 0, 0, 0.2);
+        color: #fff;
+        border-radius: 6px;
+        font-size: 11px;
+        padding: 3px 8px;
+        cursor: pointer;
+      }
+      #model-edit-toggle.active {
+        border-color: rgba(79, 134, 255, 0.8);
+        background: rgba(79, 134, 255, 0.35);
       }
       #settings-actions {
         display: flex;
@@ -645,6 +787,10 @@
         <input id="model-scale" type="number" min="0.1" max="2.0" step="0.05" />
       </div>
       <div class="setting-row">
+        <span>模型编辑模式</span>
+        <button id="model-edit-toggle" type="button">开启</button>
+      </div>
+      <div class="setting-row">
         <span>界面缩放</span>
         <input id="ui-scale" type="number" min="0.5" max="2.0" step="0.05" />
       </div>
@@ -665,6 +811,7 @@
       <button id="context-passive" type="button">被动对话</button>
       <button id="context-more-info" type="button">更多信息</button>
       <button id="context-settings" type="button">设置</button>
+      <button id="context-bindings" type="button">动作绑定</button>
       <button id="context-chat-toggle" type="button">隐藏聊天框</button>
     </div>
     <div id="tools-panel" class="tool-panel">
@@ -676,6 +823,8 @@
         <button id="tool-note" type="button">便签/备忘录</button>
         <button id="tool-clipboard" type="button">剪贴板历史</button>
         <button id="tool-sysinfo" type="button">系统信息</button>
+        <button id="tool-model-switch" type="button"><span class="tool-icon">&#x21bb;</span>切换模型</button>
+        <button id="tool-bindings" type="button">动作绑定</button>
       </div>
     </div>
     <div id="note-panel" class="tool-panel">
@@ -842,6 +991,41 @@
       <div class="info-row"><span class="info-label">内存</span><span id="info-mem">-</span></div>
       <div class="info-row"><span class="info-label">网速</span><span id="info-net">-</span></div>
       <div class="info-row"><span class="info-label">电量</span><span id="info-battery">-</span></div>
+    </div>
+    <div id="binding-panel" class="tool-panel">
+      <div class="panel-title">
+        动作绑定
+        <button class="panel-close" data-close="binding-panel" type="button">×</button>
+      </div>
+      <div class="panel-header">
+        <h3>动作绑定</h3>
+        <span class="model-badge" id="binding-model-name">-</span>
+      </div>
+      <div class="tabs">
+        <div class="tab active" data-tab="mood">心情</div>
+        <div class="tab" data-tab="status">状态</div>
+        <div class="tab" data-tab="pomodoro">番茄钟</div>
+        <div class="tab" data-tab="ai">AI</div>
+        <div class="tab" data-tab="interaction">互动</div>
+      </div>
+      <div class="binding-grid" id="binding-grid"></div>
+      <div class="preview-area">
+        <button id="preview-btn" type="button">▶ 预览</button>
+        <button id="loop-btn" type="button">循环预览</button>
+        <button id="stop-btn" type="button">停止</button>
+      </div>
+      <div class="actions">
+        <button id="apply-preset-btn" type="button">应用预设</button>
+        <button id="save-preset-btn" type="button">保存为预设</button>
+        <button id="export-btn" type="button">导出</button>
+        <button id="reset-btn" type="button">重置为默认</button>
+      </div>
+    </div>
+    <div id="preset-dialog">
+      <div class="modal-card">
+        <h3>选择预设</h3>
+        <div id="preset-list"></div>
+      </div>
     </div>
 
     <script src="qrc:///qtwebchannel/qwebchannel.js"></script>

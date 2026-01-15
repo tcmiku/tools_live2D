@@ -73,9 +73,9 @@ class FocusStats:
     def format_today_focus(self) -> str:
         seconds = self.get_today_focus_seconds()
         if seconds < 60:
-            return f"{seconds} 秒"
+            return f"{seconds} sec"
         minutes, sec = divmod(seconds, 60)
         if minutes < 60:
-            return f"{minutes} 分钟 {sec} 秒"
+            return f"{minutes} min {sec} sec"
         hours, minutes = divmod(minutes, 60)
-        return f"{hours} 小时 {minutes} 分钟"
+        return f"{hours} hr {minutes} min"

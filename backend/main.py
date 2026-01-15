@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
     QWidget,
+    QGroupBox,
 )
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEngineSettings
@@ -40,6 +41,7 @@ from focus import FocusEngine, adjust_state_for_pomodoro
 from stats import FocusStats
 from ai_client import AIClient
 from bridge import BackendBridge
+from model_bindings import ModelBindingManager
 from settings import AppSettings
 from pomodoro import PomodoroEngine, reward_for_focus_minutes
 from achievements import build_daily_summary, build_weekly_summary
@@ -113,8 +115,30 @@ class Live2DPetWindow(QWebEngineView):
             super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event) -> None:
+        if self._drag_offset is not None:
+            self.snap_to_edges()
         self._drag_offset = None
         super().mouseReleaseEvent(event)
+
+    def snap_to_edges(self, margin: int = 20) -> None:
+        if self._locked:
+            return
+        screen = self.screen() or QApplication.primaryScreen()
+        if not screen:
+            return
+        geo = screen.availableGeometry()
+        rect = self.frameGeometry()
+        x = rect.x()
+        y = rect.y()
+        if abs(rect.left() - geo.left()) <= margin:
+            x = geo.left()
+        if abs(geo.right() - rect.right()) <= margin:
+            x = geo.right() - rect.width() + 1
+        if abs(rect.top() - geo.top()) <= margin:
+            y = geo.top()
+        if abs(geo.bottom() - rect.bottom()) <= margin:
+            y = geo.bottom() - rect.height() + 1
+        self.move(x, y)
 
     def set_drag_enabled(self, enabled: bool) -> None:
         self._drag_enabled = enabled
@@ -171,9 +195,10 @@ class HotkeyHintWindow(QWidget):
 
 
 class SettingsDialog(QDialog):
-    def __init__(self, settings: AppSettings, parent=None) -> None:
+    def __init__(self, settings: AppSettings, parent=None, bridge=None) -> None:
         super().__init__(parent)
         self._settings = settings
+        self._bridge = bridge
         self.setWindowTitle("个性化设置")
         self.setStyleSheet(
             "QDialog { background: #f7f7f5; }"
@@ -236,6 +261,16 @@ class SettingsDialog(QDialog):
         self.hotkey_note.setPlaceholderText("Ctrl+Shift+P")
         self.hotkey_pomodoro.setPlaceholderText("Ctrl+Shift+T")
 
+        self.model_edit_mode_btn = QPushButton("开启模型编辑模式")
+        self.model_edit_mode_btn.setCheckable(True)
+        self.model_edit_mode_btn.setStyleSheet(
+            "QPushButton { background: #5cb85c; color: white; border: none; border-radius: 6px; padding: 6px 12px; }"
+            "QPushButton:checked { background: #d9534f; }"
+            "QPushButton:hover { background: #4cae4c; }"
+            "QPushButton:checked:hover { background: #c9302c; }"
+        )
+        self.model_edit_mode_btn.toggled.connect(self._on_edit_mode_toggled)
+
         form.addRow("活跃判定阈值", self.active_spin)
         form.addRow("睡眠判定阈值", self.sleep_spin)
         form.addRow("窗口透明度", self.opacity_spin)
@@ -245,6 +280,7 @@ class SettingsDialog(QDialog):
         form.addRow("热键：显示/隐藏", self.hotkey_toggle)
         form.addRow("热键：快速便签", self.hotkey_note)
         form.addRow("热键：番茄钟", self.hotkey_pomodoro)
+        form.addRow(self.model_edit_mode_btn)
 
         self.buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         self.buttons.accepted.connect(self.accept)
@@ -264,6 +300,14 @@ class SettingsDialog(QDialog):
         self.hotkey_toggle.setText(str(data.get("hotkey_toggle_pet", "Ctrl+Shift+L")))
         self.hotkey_note.setText(str(data.get("hotkey_note", "Ctrl+Shift+P")))
         self.hotkey_pomodoro.setText(str(data.get("hotkey_pomodoro", "Ctrl+Shift+T")))
+        edit_mode = bool(data.get("model_edit_mode", False))
+        self.model_edit_mode_btn.setChecked(edit_mode)
+        self.model_edit_mode_btn.setText("关闭模型编辑模式" if edit_mode else "开启模型编辑模式")
+
+    def _on_edit_mode_toggled(self, checked: bool) -> None:
+        self.model_edit_mode_btn.setText("关闭模型编辑模式" if checked else "开启模型编辑模式")
+        if self._bridge and hasattr(self._bridge, 'setModelEditMode'):
+            self._bridge.setModelEditMode(checked)
 
     def get_values(self) -> dict:
         return {
@@ -276,6 +320,7 @@ class SettingsDialog(QDialog):
             "hotkey_toggle_pet": self.hotkey_toggle.text().strip(),
             "hotkey_note": self.hotkey_note.text().strip(),
             "hotkey_pomodoro": self.hotkey_pomodoro.text().strip(),
+            "model_edit_mode": bool(self.model_edit_mode_btn.isChecked()),
         }
 
 
@@ -414,12 +459,17 @@ def main() -> None:
     )
     passive_chat = PassiveChatEngine(passive_base_config)
     reminder_store = ReminderStore(os.path.join(BASE_DIR, "data", "reminders.json"))
+    bindings_path = settings.get_settings().get("bindings_path", "data/model_bindings.json")
+    if not os.path.isabs(bindings_path):
+        bindings_path = os.path.join(BASE_DIR, bindings_path)
+    binding_manager = ModelBindingManager(bindings_path)
     bridge = BackendBridge(
         ai_client,
         settings=settings,
         pomodoro=pomodoro,
         reminders=reminders,
         reminder_store=reminder_store,
+        binding_manager=binding_manager,
     )
 
     tray_icon_path = os.path.join(ASSETS_DIR, "tray_icon.png")
@@ -467,7 +517,7 @@ def main() -> None:
     settings_action = menu.addAction("个性化设置")
 
     def open_settings() -> None:
-        dialog = SettingsDialog(settings, parent=window)
+        dialog = SettingsDialog(settings, parent=window, bridge=bridge)
         if dialog.exec() == QDialog.Accepted:
             values = dialog.get_values()
             bridge.setSettings(values)
@@ -689,6 +739,8 @@ def main() -> None:
     bridge.userMessage.connect(lambda _text: record_interaction())
 
     last_status = None
+    last_mood_label = None
+    last_pomodoro_mode = "idle"
     summary_sent_date = ""
     last_pomodoro_count = pomodoro.get_count_today()
     hint_ready = True
@@ -763,6 +815,35 @@ def main() -> None:
         summary_sent_date = today
         logging.info("summary pushed: %s", reason)
 
+    def trigger_binding_action(category: str, key: str) -> None:
+        model_path = settings.get_settings().get("model_path", "")
+        if not model_path:
+            return
+        binding = binding_manager.get_binding(model_path, category, key)
+        if not binding.motion and not binding.expression:
+            return
+        bridge.bindingPreview.emit(binding.motion or "", binding.expression or "")
+
+    def classify_ai_text(text: str) -> str | None:
+        lowered = text.lower()
+        if any(word in lowered for word in ["欢迎", "你好", "hello", "hi"]):
+            return "greeting"
+        if any(word in lowered for word in ["加油", "cheer", "棒"]):
+            return "cheer"
+        if any(word in lowered for word in ["提醒", "休息", "喝水"]):
+            return "reminder"
+        if any(word in lowered for word in ["再见", "拜拜", "goodbye"]):
+            return "farewell"
+        return None
+
+    def handle_ai_binding(text: str) -> None:
+        kind = classify_ai_text(text)
+        if kind:
+            trigger_binding_action("ai", kind)
+
+    bridge.aiReply.connect(handle_ai_binding)
+    bridge.passiveMessage.connect(handle_ai_binding)
+
     def tick() -> None:
         state = engine.update()
         state = adjust_state_for_pomodoro(state, pomodoro.mode)
@@ -785,9 +866,19 @@ def main() -> None:
             "paused": "暂停",
         }
         nonlocal last_status
+        nonlocal last_mood_label
+        nonlocal last_pomodoro_mode
         if status_label != last_status:
             logging.info("status changed: %s", status_map.get(status_label, status_label))
             last_status = status_label
+            trigger_binding_action("status", status_label)
+        if mood_label != last_mood_label:
+            last_mood_label = mood_label
+            trigger_binding_action("mood", mood_label)
+        if pomodoro.mode != last_pomodoro_mode:
+            last_pomodoro_mode = pomodoro.mode
+            if pomodoro.mode in ("focus", "break"):
+                trigger_binding_action("pomodoro", pomodoro.mode)
         tooltip = f"状态：{status_map.get(status_label, status_label)}\n今日专注：{stats.format_today_focus()}"
         tray.setToolTip(tooltip)
 
@@ -881,8 +972,6 @@ def main() -> None:
     summary_timer.start(60 * 60 * 1000)
     hourly_summary_check()
 
-    last_pomodoro_mode = "idle"
-
     def poll_pomodoro() -> None:
         nonlocal last_pomodoro_mode, last_pomodoro_count
         state = bridge.poll_pomodoro()
@@ -892,6 +981,7 @@ def main() -> None:
         count_today = int(state.get("count_today", 0))
         if count_today > last_pomodoro_count:
             last_pomodoro_count = count_today
+            trigger_binding_action("pomodoro", "completed")
             push_summary("pomodoro_complete")
         if mode != last_pomodoro_mode:
             if mode == "break":
