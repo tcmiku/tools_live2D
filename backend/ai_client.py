@@ -87,12 +87,14 @@ class AIClient:
         focus_hint = _format_duration(focus_seconds_today)
         extra_hint = self._extra_context(user_text)
         favor_hint = self._favor_hint()
+        mood_hint = self._mood_hint()
         system_prompt = (
             "你是一只友好的 Live2D 桌面宠物。"
             "语气轻松、鼓励用户专注、回答简洁。"
             "可以参考今日专注时间作为上下文，但不要每句话都提到。"
             f"今日专注时间：{focus_hint}。"
             f"{favor_hint}"
+            f"{mood_hint}"
             f"{extra_hint}"
         )
 
@@ -150,6 +152,25 @@ class AIClient:
         if favor <= 25:
             return "好感度偏低，语气保持礼貌克制。"
         return "好感度中等，语气自然友好。"
+
+    def _mood_hint(self) -> str:
+        if not self._settings:
+            return ""
+        data = self._settings.get_settings()
+        try:
+            mood = int(data.get("mood", 60))
+        except (TypeError, ValueError):
+            mood = 60
+        mood = max(0, min(100, mood))
+        if mood >= 80:
+            return "心情很好，语气更轻快活泼。"
+        if mood >= 60:
+            return "心情不错，语气温柔友好。"
+        if mood >= 40:
+            return "心情平静，语气平和自然。"
+        if mood >= 20:
+            return "心情有点低落，语气多些鼓励。"
+        return "心情有些孤独，语气更关心陪伴。"
 
     def _extra_context(self, user_text: str, now: float | None = None) -> str:
         text = user_text.lower()

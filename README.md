@@ -25,6 +25,10 @@
 - ✅ **AI 对话历史** - 自动保存最近6轮对话上下文，提供更连贯的对话体验
 - ✅ **交互式反馈** - 打字时随机鼓励，空闲时提醒休息，切换窗口时建议专注
 - ✅ **键盘快捷键** - 全局热键快速操作（Ctrl+Shift+L: 显示/隐藏, Ctrl+Shift+P: 便签, Ctrl+Shift+T: 番茄钟）
+- ✅ **心情/状态系统** - 基于互动/专注/好感度/空闲计算心情，影响对话语气与被动频率
+- ✅ **每日/每周总结推送** - 17:00 或达成条件触发专注/番茄钟汇总
+- ✅ **热键可视化提示** - 按住 Ctrl+Shift 显示快捷键浮窗提示
+- ✅ **托盘重启** - 一键重启应用
 
 ### 🤖 AI 聊天系统
 - **OpenAI 兼容 API** - 支持多种 AI 服务提供商
@@ -87,7 +91,10 @@ tools_live2D/
 │   ├── notes.py               # 便签存储（300ms防抖）
 │   ├── sysinfo.py             # 系统信息监控（CPU/内存/网络/电池）
 │   ├── login_rewards.py       # 每日登录奖励系统
-│   └── hotkeys.py             # 全局热键管理
+│   ├── achievements.py        # 每日/每周成就总结
+│   ├── mood.py                # 心情计算与分档
+│   ├── hotkeys.py             # 全局热键管理
+│   └── hotkey_hints.py        # 热键提示文案生成
 ├── web/                        # 前端界面
 │   ├── index.html             # 主界面（含所有面板UI）
 │   └── js/
@@ -114,7 +121,10 @@ tools_live2D/
 
 **🎯 新增模块说明：**
 - `login_rewards.py` - 每日登录天数追踪与奖励计算
+- `achievements.py` - 每日/每周成就总结生成
+- `mood.py` - 心情计算与分档
 - `hotkeys.py` - 全局热键注册与管理（Windows API）
+- `hotkey_hints.py` - 热键提示文案生成
 - `bridge.py` 扩展 - 备份/恢复信号与处理
 
 ---
@@ -171,6 +181,7 @@ python backend/main.py
 | **窗口位置** | 快速定位到屏幕角落（左上/右上/左下/右下/居中） |
 | **隐藏宠物窗口** | 显示/隐藏宠物 |
 | **锁定位置** | 禁止拖动宠物窗口 |
+| **重启程序** | 重启应用 |
 | **关闭程序** | 退出应用 |
 
 **提示：** 备份/恢复会导出 settings.json, stats.json, pomodoro.json, clipboard.json, note.txt
@@ -402,6 +413,7 @@ const modelUrl = new URL("./model/your_model/your_model.model3.json", window.loc
     "last_login_date": "2026-01-15",
     "login_streak": 1,
     "favor": 50,
+    "mood": 60,
     "hotkey_toggle_pet": "Ctrl+Shift+L",
     "hotkey_note": "Ctrl+Shift+P",
     "hotkey_pomodoro": "Ctrl+Shift+T"
@@ -413,6 +425,7 @@ const modelUrl = new URL("./model/your_model/your_model.model3.json", window.loc
 - `last_login_date` - 上次登录日期，用于计算连续天数
 - `login_streak` - 连续登录天数
 - `favor` - 好感度（0-100），影响对话语气
+- `mood` - 心情值（0-100），影响语气与被动频率
 - `hotkey_*` - 自定义全局热键配置
 
 ### 剪贴板历史 (`data/clipboard.json`)
@@ -657,6 +670,11 @@ def getNewData(self) -> dict:
 - ✅ **好感度系统** - 互动影响语气（80+亲近，25-礼貌）
 - ✅ **更多状态面板** - 详细系统信息展示
 
+  - ✅ **心情/状态系统** - 心情计算与对话语气/被动频率联动
+  - ✅ **每日/每周总结推送** - 17:00 或条件达成推送专注总结
+  - ✅ **热键可视化提示** - 按住 Ctrl+Shift 显示热键浮窗
+  - ✅ **托盘重启** - 一键重启应用
+
 **后端改进：**
 - `login_rewards.py` - 登录奖励模块
 - `hotkeys.py` - 全局热键管理
@@ -805,4 +823,3 @@ def getNewData(self) -> dict:
 **祝你使用愉快！** 🎉
 
 让这个小宠物陪伴你的每一个专注时刻～
-

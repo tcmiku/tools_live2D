@@ -30,6 +30,7 @@ class BackendBridge(QObject):
     remindersUpdated = Signal(dict)
     todosUpdated = Signal(list)
     passiveMessage = Signal(str)
+    userMessage = Signal(str)
     aiTestResult = Signal(dict)
     favorUpdated = Signal(int)
     openPanel = Signal(str)
@@ -64,12 +65,14 @@ class BackendBridge(QObject):
             "focus_seconds_today": 0,
         }
 
-    def push_state(self, state: FocusState) -> None:
+    def push_state(self, state: FocusState, extra: dict | None = None) -> None:
         payload = {
             "status": state.status,
             "idle_ms": state.idle_ms,
             "focus_seconds_today": state.focus_seconds_today,
         }
+        if extra:
+            payload.update(extra)
         self._last_state = payload
         self.stateUpdated.emit(payload)
 
@@ -86,6 +89,7 @@ class BackendBridge(QObject):
         message = text.strip()
         if not message:
             return
+        self.userMessage.emit(message)
 
         def _worker() -> None:
             try:

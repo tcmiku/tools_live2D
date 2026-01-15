@@ -43,6 +43,7 @@ from bridge import BackendBridge
 from settings import AppSettings
 from pomodoro import PomodoroEngine, reward_for_focus_minutes
 from achievements import build_daily_summary, build_weekly_summary
+from mood import compute_mood, mood_bucket, mood_interval_factor
 from hotkey_hints import build_hotkey_hint
 from hotkeys import HotkeyManager, HotkeyFilter, parse_hotkey
 from reminders import ReminderEngine, ReminderStore, ReminderConfig
@@ -403,16 +404,15 @@ def main() -> None:
     pomodoro = PomodoroEngine(os.path.join(BASE_DIR, "data", "pomodoro.json"))
     reminders = ReminderEngine(ReminderConfig.from_settings(settings.get_settings()))
     settings_data = settings.get_settings()
-    passive_chat = PassiveChatEngine(
-        PassiveChatConfig(
-            enabled=settings_data.get("passive_enabled", True),
-            interval_min=settings_data.get("passive_interval_min", 30),
-            random_enabled=settings_data.get("passive_random_enabled", True),
-            blessing_enabled=settings_data.get("passive_blessing_enabled", True),
-            focus_enabled=settings_data.get("passive_focus_enabled", True),
-            focus_interval_min=settings_data.get("passive_focus_interval_min", 60),
-        )
+    passive_base_config = PassiveChatConfig(
+        enabled=settings_data.get("passive_enabled", True),
+        interval_min=settings_data.get("passive_interval_min", 30),
+        random_enabled=settings_data.get("passive_random_enabled", True),
+        blessing_enabled=settings_data.get("passive_blessing_enabled", True),
+        focus_enabled=settings_data.get("passive_focus_enabled", True),
+        focus_interval_min=settings_data.get("passive_focus_interval_min", 60),
     )
+    passive_chat = PassiveChatEngine(passive_base_config)
     reminder_store = ReminderStore(os.path.join(BASE_DIR, "data", "reminders.json"))
     bridge = BackendBridge(
         ai_client,
@@ -561,6 +561,14 @@ def main() -> None:
     exit_action = menu.addAction("关闭程序")
     exit_action.triggered.connect(lambda: (logging.info("exit requested"), tray.hide(), app.quit()))
 
+    restart_action = menu.addAction("重启程序")
+    def restart_app() -> None:
+        logging.info("restart requested")
+        QProcess.startDetached(sys.executable, sys.argv)
+        tray.hide()
+        app.quit()
+    restart_action.triggered.connect(restart_app)
+
     tray.setContextMenu(menu)
     tray.show()
 
@@ -642,9 +650,21 @@ def main() -> None:
                 if not hotkey_manager.register(hotkey_id, modifiers, key):
                     logging.warning("hotkey register failed: %s", text)
 
-        register_hotkeys(settings.get_settings())
-        bridge.settingsUpdated.connect(register_hotkeys)
-        app.aboutToQuit.connect(hotkey_manager.unregister_all)
+    register_hotkeys(settings.get_settings())
+    bridge.settingsUpdated.connect(register_hotkeys)
+    app.aboutToQuit.connect(hotkey_manager.unregister_all)
+
+    def apply_passive_config_for_mood(mood_value: int) -> None:
+        interval = max(5, int(passive_base_config.interval_min * mood_interval_factor(mood_value)))
+        config = PassiveChatConfig(
+            enabled=passive_base_config.enabled,
+            interval_min=interval,
+            random_enabled=passive_base_config.random_enabled,
+            blessing_enabled=passive_base_config.blessing_enabled,
+            focus_enabled=passive_base_config.focus_enabled,
+            focus_interval_min=passive_base_config.focus_interval_min,
+        )
+        passive_chat.set_config(config)
 
     def apply_settings(data: dict) -> None:
         try:
@@ -653,27 +673,39 @@ def main() -> None:
             pomodoro.set_durations(int(data["pomodoro_focus_min"]), int(data["pomodoro_break_min"]))
             reminders.set_config(ReminderConfig.from_settings(data))
             hint_window.set_text(build_hotkey_hint(data))
-            passive_chat.set_config(
-                PassiveChatConfig(
-                    enabled=bool(data.get("passive_enabled", True)),
-                    interval_min=int(data.get("passive_interval_min", 30)),
-                    random_enabled=bool(data.get("passive_random_enabled", True)),
-                    blessing_enabled=bool(data.get("passive_blessing_enabled", True)),
-                    focus_enabled=bool(data.get("passive_focus_enabled", True)),
-                    focus_interval_min=int(data.get("passive_focus_interval_min", 60)),
-                )
-            )
+            passive_base_config.enabled = bool(data.get("passive_enabled", True))
+            passive_base_config.interval_min = int(data.get("passive_interval_min", 30))
+            passive_base_config.random_enabled = bool(data.get("passive_random_enabled", True))
+            passive_base_config.blessing_enabled = bool(data.get("passive_blessing_enabled", True))
+            passive_base_config.focus_enabled = bool(data.get("passive_focus_enabled", True))
+            passive_base_config.focus_interval_min = int(data.get("passive_focus_interval_min", 60))
+            apply_passive_config_for_mood(int(data.get("mood", 60)))
         except Exception as exc:
             logging.exception("apply settings failed: %s", exc)
 
     apply_settings(settings.get_settings())
     bridge.settingsUpdated.connect(apply_settings)
     bridge.settingsUpdated.emit(settings.get_settings())
+    bridge.userMessage.connect(lambda _text: record_interaction())
 
     last_status = None
     summary_sent_date = ""
     last_pomodoro_count = pomodoro.get_count_today()
     hint_ready = True
+    interaction_count = 0
+    last_interaction_count_ts = 0.0
+    mood_day = date.today().isoformat()
+    current_mood = int(settings.get_settings().get("mood", 60))
+    mood_label, mood_emoji = mood_bucket(current_mood)
+    last_mood_update = 0.0
+
+    def record_interaction() -> None:
+        nonlocal interaction_count, last_interaction_count_ts
+        now = time.time()
+        if now - last_interaction_count_ts < 30:
+            return
+        interaction_count += 1
+        last_interaction_count_ts = now
 
     def ctrl_shift_pressed() -> bool:
         return (
@@ -692,6 +724,32 @@ def main() -> None:
         hint_window.show_hint()
         QTimer.singleShot(2000, hint_window.hide)
 
+    def update_mood(state, now: float) -> None:
+        nonlocal current_mood, mood_label, mood_emoji, last_mood_update, mood_day, interaction_count
+        if now - last_mood_update < 60:
+            return
+        last_mood_update = now
+        today = date.today().isoformat()
+        if today != mood_day:
+            mood_day = today
+            interaction_count = 0
+        if state.input_type in ("keyboard", "mouse"):
+            record_interaction()
+        data = settings.get_settings()
+        favor = int(data.get("favor", 50))
+        new_mood = compute_mood(
+            stats.get_today_focus_seconds(),
+            favor,
+            interaction_count,
+            state.idle_ms,
+        )
+        if new_mood != current_mood:
+            current_mood = new_mood
+            mood_label, mood_emoji = mood_bucket(current_mood)
+            settings.set_settings({"mood": current_mood})
+            apply_passive_config_for_mood(current_mood)
+            logging.info("mood updated: %s %s", current_mood, mood_label)
+
     def push_summary(reason: str) -> None:
         nonlocal summary_sent_date
         today = date.today().isoformat()
@@ -708,7 +766,17 @@ def main() -> None:
     def tick() -> None:
         state = engine.update()
         state = adjust_state_for_pomodoro(state, pomodoro.mode)
-        bridge.push_state(state)
+        if state.input_type in ("keyboard", "mouse"):
+            record_interaction()
+        update_mood(state, time.time())
+        bridge.push_state(
+            state,
+            {
+                "mood": current_mood,
+                "mood_label": mood_label,
+                "mood_emoji": mood_emoji,
+            },
+        )
         status_label = "paused" if engine.paused else state.status
         status_map = {
             "active": "活跃",

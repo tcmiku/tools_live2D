@@ -46,7 +46,9 @@ let settingsState = {
   local_city: "",
   local_location: "",
   favor: 50,
+  mood: 60,
 };
+let moodState = { score: 60, label: "平静", emoji: "😐" };
 let noteState = "";
 let clipboardItems = [];
 let pomodoroState = null;
@@ -130,6 +132,14 @@ function updateSpeechBubblePosition() {
   bubble.style.right = "auto";
 }
 
+function updateMoodEmoji() {
+  const badge = document.getElementById("mood-emoji");
+  if (!badge) return;
+  badge.textContent = moodState.emoji || "";
+  badge.style.opacity = moodState.emoji ? "0.9" : "0";
+  badge.title = `${moodState.label} ${moodState.score}`;
+}
+
 function logStatus(text) {
   appendChatMessage("pet", text);
 }
@@ -137,6 +147,16 @@ function logStatus(text) {
 function handleStateUpdate(state) {
   if (!state) return;
   currentState = state;
+  if (state.mood != null) {
+    moodState.score = Number(state.mood);
+  }
+  if (state.mood_label) {
+    moodState.label = state.mood_label;
+  }
+  if (state.mood_emoji) {
+    moodState.emoji = state.mood_emoji;
+  }
+  updateMoodEmoji();
   // TODO: trigger Live2D motions or expressions based on state.status
 }
 
@@ -856,6 +876,7 @@ function syncMoreInfoPanel() {
   const status = document.getElementById("info-status");
   const focus = document.getElementById("info-focus");
   const favor = document.getElementById("info-favor");
+  const mood = document.getElementById("info-mood");
   const aiStatus = document.getElementById("info-ai-status");
   const aiModel = document.getElementById("info-ai-model");
   const pomo = document.getElementById("info-pomodoro");
@@ -869,6 +890,7 @@ function syncMoreInfoPanel() {
   if (status) status.textContent = currentState?.status || "-";
   if (focus) focus.textContent = formatDuration(currentState?.focus_seconds_today || 0);
   if (favor) favor.textContent = String(settingsState.favor ?? 50);
+  if (mood) mood.textContent = `${moodState.emoji} ${moodState.label} ${moodState.score}`;
   if (aiStatus) aiStatus.textContent = lastAiTestStatus;
   if (aiModel) aiModel.textContent = settingsState.ai_model || "-";
   if (pomo && pomodoroState) {

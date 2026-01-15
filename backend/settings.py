@@ -99,6 +99,7 @@ class AppSettings:
             "local_city": "",
             "local_location": "",
             "favor": 50,
+            "mood": 60,
             "hotkey_toggle_pet": "Ctrl+Shift+L",
             "hotkey_note": "Ctrl+Shift+P",
             "hotkey_pomodoro": "Ctrl+Shift+T",
@@ -132,6 +133,11 @@ class AppSettings:
                 current["favor"] = max(0, min(100, int(current["favor"])))
             except (TypeError, ValueError):
                 current["favor"] = 50
+        if "mood" in current:
+            try:
+                current["mood"] = max(0, min(100, int(current["mood"])))
+            except (TypeError, ValueError):
+                current["mood"] = 60
         current["ai_providers"] = self._normalize_ai_providers(current)
         first = current["ai_providers"][0]
         current["ai_provider"] = first.get("name", "OpenAI兼容")

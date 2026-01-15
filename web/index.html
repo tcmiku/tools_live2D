@@ -541,6 +541,11 @@
         border-style: solid;
         border-color: rgba(255, 255, 255, 0.92) transparent transparent transparent;
       }
+      #mood-emoji {
+        font-size: 18px;
+        opacity: 0.9;
+        transition: opacity 0.2s ease;
+      }
       #quick-toolbar {
         position: absolute;
         right: 16px;
@@ -594,24 +599,25 @@
       }
     </style>
   </head>
-  <body>
-    <canvas id="canvas"></canvas>
-    <div id="speech-bubble"></div>
+    <body>
+      <canvas id="canvas"></canvas>
+      <div id="speech-bubble"></div>
     <div id="quick-toolbar">
       <button id="quick-toggle" class="quick-btn" title="显示/隐藏">🎯</button>
       <button id="quick-note" class="quick-btn" title="便签">📝</button>
       <button id="quick-pomodoro" class="quick-btn" title="番茄钟">⏰</button>
       <button id="quick-settings" class="quick-btn" title="设置">⚙️</button>
     </div>
-    <div id="chat-panel" class="collapsed">
-      <div id="chat-handle">
-        <span class="label">聊天</span>
-        <div class="handle-actions">
-          <button id="move-toggle" type="button">移动</button>
-          <button id="settings-toggle" type="button">设置</button>
-          <span class="hint">点击展开</span>
+      <div id="chat-panel" class="collapsed">
+        <div id="chat-handle">
+          <span class="label">聊天</span>
+          <div class="handle-actions">
+            <span id="mood-emoji" title="心情"></span>
+            <button id="move-toggle" type="button">移动</button>
+            <button id="settings-toggle" type="button">设置</button>
+            <span class="hint">点击展开</span>
+          </div>
         </div>
-      </div>
       <div id="chat-box"></div>
       <div id="chat-input-bar">
         <input id="chat-input" type="text" placeholder="跟桌宠说点什么..." />
@@ -817,9 +823,10 @@
         更多信息
         <button class="panel-close" data-close="more-info-panel" type="button">×</button>
       </div>
-      <div class="info-row"><span class="info-label">状态</span><span id="info-status">-</span></div>
-      <div class="info-row"><span class="info-label">今日专注</span><span id="info-focus">-</span></div>
-      <div class="info-row"><span class="info-label">好感度</span><span id="info-favor">-</span></div>
+        <div class="info-row"><span class="info-label">状态</span><span id="info-status">-</span></div>
+        <div class="info-row"><span class="info-label">今日专注</span><span id="info-focus">-</span></div>
+        <div class="info-row"><span class="info-label">好感度</span><span id="info-favor">-</span></div>
+        <div class="info-row"><span class="info-label">心情</span><span id="info-mood">-</span></div>
       <div class="info-row"><span class="info-label">AI 状态</span><span id="info-ai-status">未测试</span></div>
       <div class="info-row"><span class="info-label">AI 模型</span><span id="info-ai-model">-</span></div>
       <div class="info-row"><span class="info-label">番茄钟</span><span id="info-pomodoro">-</span></div>
