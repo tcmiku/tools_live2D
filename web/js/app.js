@@ -699,6 +699,33 @@ function setupFavorReset() {
   });
 }
 
+function setupBackupRestore() {
+  const backupBtn = document.getElementById("backup-btn");
+  const restoreBtn = document.getElementById("restore-btn");
+  if (backupBtn) {
+    backupBtn.addEventListener("click", () => {
+      if (backend && typeof backend.openBackupDialog === "function") {
+        backend.openBackupDialog();
+      }
+    });
+  }
+  if (restoreBtn) {
+    restoreBtn.addEventListener("click", () => {
+      if (backend && typeof backend.restoreBackup === "function") {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = ".zip";
+        input.onchange = () => {
+          const file = input.files?.[0];
+          if (!file) return;
+          backend.restoreBackup(file.path || "");
+        };
+        input.click();
+      }
+    });
+  }
+}
+
 function setupPassivePanel() {
   const enabled = document.getElementById("passive-enabled");
   const randomEnabled = document.getElementById("passive-random-enabled");
@@ -1053,55 +1080,12 @@ function setupModelInteraction() {
     if (moveModeEnabled) {
       return;
     }
-    if (!isPointerOverModel(event)) {
-      setDragBlocker("model", false);
-      return;
-    }
-    interactionState.dragging = true;
-    interactionState.lastX = event.clientX;
-    interactionState.lastY = event.clientY;
-    setDragBlocker("model", true);
+    setDragBlocker("model", isPointerOverModel(event));
   });
 
   window.addEventListener("mouseup", () => {
-    if (!interactionState.dragging) return;
-    interactionState.dragging = false;
     setDragBlocker("model", false);
-    scheduleSaveModelConfig();
   });
-
-  window.addEventListener("mousemove", (event) => {
-    if (moveModeEnabled) {
-      return;
-    }
-    if (live2dModel && !interactionState.dragging) {
-      setDragBlocker("model", isPointerOverModel(event));
-    }
-    if (!interactionState.dragging || !live2dApp) return;
-    const dx = event.clientX - interactionState.lastX;
-    const dy = event.clientY - interactionState.lastY;
-    interactionState.lastX = event.clientX;
-    interactionState.lastY = event.clientY;
-    modelConfig.xOffset += dx;
-    modelConfig.yOffset += dy;
-    positionLive2D();
-  });
-
-  canvas.addEventListener(
-    "wheel",
-    (event) => {
-      if (moveModeEnabled) {
-        return;
-      }
-      if (!live2dApp) return;
-      event.preventDefault();
-      const delta = -event.deltaY / 800;
-      modelConfig.scale = clamp(modelConfig.scale + delta, 0.1, 2.0);
-      positionLive2D();
-      scheduleSaveModelConfig();
-    },
-    { passive: false }
-  );
 }
 
 function isPointerOverPlaceholder(event) {
@@ -1731,6 +1715,7 @@ setupAIConfigPanel();
 setupPassivePanel();
 setupGiftButton();
 setupFavorReset();
+setupBackupRestore();
 setupQuickToolbar();
 setupPanelCloseButtons();
 setupPanelDrag();

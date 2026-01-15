@@ -5,8 +5,10 @@ import os
 import sys
 import time
 import random
+import ctypes
+from datetime import date
 
-from PySide6.QtCore import QTimer, Qt, QUrl, QPoint
+from PySide6.QtCore import QTimer, Qt, QUrl, QPoint, QProcess
 from PySide6.QtGui import QIcon, QGuiApplication
 from PySide6.QtWidgets import (
     QApplication,
@@ -26,6 +28,9 @@ from PySide6.QtWidgets import (
     QPushButton,
     QHBoxLayout,
     QVBoxLayout,
+    QFileDialog,
+    QLabel,
+    QWidget,
 )
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEngineSettings
@@ -37,8 +42,11 @@ from ai_client import AIClient
 from bridge import BackendBridge
 from settings import AppSettings
 from pomodoro import PomodoroEngine, reward_for_focus_minutes
+from achievements import build_daily_summary, build_weekly_summary
+from hotkey_hints import build_hotkey_hint
 from hotkeys import HotkeyManager, HotkeyFilter, parse_hotkey
 from reminders import ReminderEngine, ReminderStore, ReminderConfig
+from login_rewards import apply_daily_login
 from passive_chat import PassiveChatEngine, PassiveChatConfig
 
 
@@ -119,6 +127,46 @@ class Live2DPetWindow(QWebEngineView):
 
     def is_locked(self) -> bool:
         return self._locked
+
+
+class HotkeyHintWindow(QWidget):
+    def __init__(self, parent_window: QWidget) -> None:
+        super().__init__(None, Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self._parent_window = parent_window
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WA_ShowWithoutActivating, True)
+        self.setWindowFlag(Qt.WindowDoesNotAcceptFocus, True)
+        self.setWindowFlag(Qt.BypassWindowManagerHint, True)
+        self.setWindowFlag(Qt.WindowTransparentForInput, True)
+
+        self._label = QLabel()
+        self._label.setText("")
+        self._label.setStyleSheet(
+            "QLabel {"
+            " color: #e9edf2;"
+            " background: rgba(20, 24, 32, 210);"
+            " border: 1px solid rgba(255, 255, 255, 50);"
+            " border-radius: 10px;"
+            " padding: 10px 14px;"
+            " font-size: 12px;"
+            "}"
+        )
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._label)
+        self.setLayout(layout)
+
+    def set_text(self, text: str) -> None:
+        self._label.setText(text)
+        self.adjustSize()
+
+    def show_hint(self) -> None:
+        parent_geo = self._parent_window.geometry()
+        x = parent_geo.x() + 12
+        y = max(12, parent_geo.y() - self.height() - 8)
+        self.move(x, y)
+        self.show()
 
 
 class SettingsDialog(QDialog):
@@ -426,6 +474,24 @@ def main() -> None:
 
     settings_action.triggered.connect(open_settings)
 
+    backup_action = menu.addAction("数据备份")
+
+    def backup_data() -> None:
+        path, _ = QFileDialog.getSaveFileName(window, "导出备份文件", BASE_DIR, "ZIP 文件 (*.zip)")
+        if path:
+            bridge.createBackup(path)
+
+    backup_action.triggered.connect(backup_data)
+
+    restore_action = menu.addAction("数据恢复")
+
+    def restore_data() -> None:
+        path, _ = QFileDialog.getOpenFileName(window, "选择备份文件", BASE_DIR, "ZIP 文件 (*.zip)")
+        if path:
+            bridge.restoreBackup(path)
+
+    restore_action.triggered.connect(restore_data)
+
     ai_detail_action = menu.addAction("AI 详细配置")
 
     def open_ai_detail() -> None:
@@ -503,6 +569,40 @@ def main() -> None:
     bridge.set_window(window)
     bridge.set_open_ai_dialog(open_ai_detail)
     logging.info("window shown")
+    hint_window = HotkeyHintWindow(window)
+    hint_window.set_text(build_hotkey_hint(settings.get_settings()))
+    hint_window.hide()
+
+    def handle_backup_result(path: str) -> None:
+        if path:
+            tray.showMessage("数据备份", f"已生成：{path}", QSystemTrayIcon.Information, 3000)
+            logging.info("backup created: %s", path)
+        else:
+            tray.showMessage("数据备份", "备份失败，请查看日志。", QSystemTrayIcon.Warning, 3000)
+
+    def handle_restore_result(path: str) -> None:
+        if path:
+            tray.showMessage("数据恢复", "已恢复备份，正在重启应用。", QSystemTrayIcon.Information, 4000)
+            logging.info("restore completed: %s", path)
+            QTimer.singleShot(1200, lambda: (QProcess.startDetached(sys.executable, sys.argv), app.quit()))
+        else:
+            tray.showMessage("数据恢复", "恢复失败，请查看日志。", QSystemTrayIcon.Warning, 3000)
+
+    bridge.backupCompleted.connect(handle_backup_result)
+    bridge.restoreCompleted.connect(handle_restore_result)
+
+    def open_backup_dialog() -> None:
+        path, _ = QFileDialog.getSaveFileName(window, "导出备份文件", BASE_DIR, "ZIP 文件 (*.zip)")
+        if path:
+            bridge.createBackup(path)
+
+    bridge.requestBackupDialog.connect(open_backup_dialog)
+
+    reward, streak, is_new_day = apply_daily_login(settings)
+    if reward > 0:
+        bridge.addFavor(float(reward))
+        bridge.push_passive_message(f"欢迎回来！连续登录第 {streak} 天，获得好感 +{reward}")
+    bridge.push_passive_message("欢迎回来～今天也一起加油吧！")
 
     hotkey_manager = HotkeyManager()
     if sys.platform.startswith("win"):
@@ -552,6 +652,7 @@ def main() -> None:
             window.setWindowOpacity(float(data["window_opacity"]) / 100.0)
             pomodoro.set_durations(int(data["pomodoro_focus_min"]), int(data["pomodoro_break_min"]))
             reminders.set_config(ReminderConfig.from_settings(data))
+            hint_window.set_text(build_hotkey_hint(data))
             passive_chat.set_config(
                 PassiveChatConfig(
                     enabled=bool(data.get("passive_enabled", True)),
@@ -570,6 +671,39 @@ def main() -> None:
     bridge.settingsUpdated.emit(settings.get_settings())
 
     last_status = None
+    summary_sent_date = ""
+    last_pomodoro_count = pomodoro.get_count_today()
+    hint_ready = True
+
+    def ctrl_shift_pressed() -> bool:
+        return (
+            ctypes.windll.user32.GetAsyncKeyState(0x11) & 0x8000
+            and ctypes.windll.user32.GetAsyncKeyState(0x10) & 0x8000
+        )
+
+    def poll_hotkey_hint() -> None:
+        nonlocal hint_ready
+        if not ctrl_shift_pressed():
+            hint_ready = True
+            return
+        if not hint_ready:
+            return
+        hint_ready = False
+        hint_window.show_hint()
+        QTimer.singleShot(2000, hint_window.hide)
+
+    def push_summary(reason: str) -> None:
+        nonlocal summary_sent_date
+        today = date.today().isoformat()
+        if summary_sent_date == today:
+            return
+        focus_today = stats.get_today_focus_seconds()
+        pomodoro_today = pomodoro.get_count_today()
+        week_focus = stats.get_week_focus_seconds()
+        bridge.push_passive_message(build_daily_summary(focus_today, pomodoro_today))
+        bridge.push_passive_message(build_weekly_summary(week_focus))
+        summary_sent_date = today
+        logging.info("summary pushed: %s", reason)
 
     def tick() -> None:
         state = engine.update()
@@ -590,6 +724,8 @@ def main() -> None:
         tray.setToolTip(tooltip)
 
         now = time.time()
+        if stats.get_today_focus_seconds() >= 2 * 60 * 60:
+            push_summary("focus_2h")
         reminder_events = reminders.update_focus(state, now)
         reminder_events += reminders.update_timers(now)
         for event in reminder_events:
@@ -663,14 +799,32 @@ def main() -> None:
     sys_timer.timeout.connect(poll_system_info)
     sys_timer.start(1000)
 
+    hotkey_hint_timer = QTimer()
+    hotkey_hint_timer.timeout.connect(poll_hotkey_hint)
+    hotkey_hint_timer.start(120)
+
+    def hourly_summary_check() -> None:
+        hour = time.localtime().tm_hour
+        if hour >= 17:
+            push_summary("daily_17")
+
+    summary_timer = QTimer()
+    summary_timer.timeout.connect(hourly_summary_check)
+    summary_timer.start(60 * 60 * 1000)
+    hourly_summary_check()
+
     last_pomodoro_mode = "idle"
 
     def poll_pomodoro() -> None:
-        nonlocal last_pomodoro_mode
+        nonlocal last_pomodoro_mode, last_pomodoro_count
         state = bridge.poll_pomodoro()
         if not state:
             return
         mode = state.get("mode", "idle")
+        count_today = int(state.get("count_today", 0))
+        if count_today > last_pomodoro_count:
+            last_pomodoro_count = count_today
+            push_summary("pomodoro_complete")
         if mode != last_pomodoro_mode:
             if mode == "break":
                 tray.showMessage("番茄钟提醒", "专注结束，开始休息。", QSystemTrayIcon.Information, 3000)

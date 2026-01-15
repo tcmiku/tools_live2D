@@ -5,7 +5,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from typing import Dict, Any
 
 
@@ -57,6 +57,21 @@ class PomodoroEngine:
 
     def get_count_today(self) -> int:
         return int(self._count_data.get(self._today_key(), 0))
+
+    def get_count_by_date(self, date_str: str) -> int:
+        return int(self._count_data.get(date_str, 0))
+
+    def get_week_count(self, now: date | None = None) -> int:
+        if now is None:
+            now = date.today()
+        start = now - timedelta(days=now.weekday())
+        end = start + timedelta(days=6)
+        total = 0
+        current = start
+        while current <= end:
+            total += self.get_count_by_date(current.isoformat())
+            current += timedelta(days=1)
+        return total
 
     def set_durations(self, focus_min: int, break_min: int) -> None:
         self.focus_min = max(1, int(focus_min))

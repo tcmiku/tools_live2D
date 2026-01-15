@@ -3,7 +3,7 @@
 import json
 import logging
 import os
-from datetime import date
+from datetime import date, timedelta
 from typing import Dict, Any
 
 
@@ -50,6 +50,25 @@ class FocusStats:
         today = self._today_key()
         day_info = self._data.get(today, {})
         return int(day_info.get("focus_seconds", 0))
+
+    def get_focus_seconds_by_date(self, date_str: str) -> int:
+        day_info = self._data.get(date_str, {})
+        return int(day_info.get("focus_seconds", 0))
+
+    def get_range_focus_seconds(self, start: date, end: date) -> int:
+        total = 0
+        current = start
+        while current <= end:
+            total += self.get_focus_seconds_by_date(current.isoformat())
+            current += timedelta(days=1)
+        return total
+
+    def get_week_focus_seconds(self, now: date | None = None) -> int:
+        if now is None:
+            now = date.today()
+        start = now - timedelta(days=now.weekday())
+        end = start + timedelta(days=6)
+        return self.get_range_focus_seconds(start, end)
 
     def format_today_focus(self) -> str:
         seconds = self.get_today_focus_seconds()

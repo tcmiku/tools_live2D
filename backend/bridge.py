@@ -3,6 +3,8 @@
 import logging
 import threading
 import os
+import time
+import zipfile
 from typing import Dict, Optional
 
 from PySide6.QtCore import QObject, Signal, Slot, QPoint
@@ -31,6 +33,9 @@ class BackendBridge(QObject):
     aiTestResult = Signal(dict)
     favorUpdated = Signal(int)
     openPanel = Signal(str)
+    backupCompleted = Signal(str)
+    restoreCompleted = Signal(str)
+    requestBackupDialog = Signal()
 
     def __init__(
         self,
@@ -306,6 +311,50 @@ class BackendBridge(QObject):
             self._window.hide()
         else:
             self._window.show()
+
+    @Slot(str)
+    def createBackup(self, target_path: str = "") -> None:
+        if not self._window:
+            return
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        data_dir = os.path.join(base_dir, "data")
+        try:
+            os.makedirs(data_dir, exist_ok=True)
+            if target_path:
+                path = target_path
+            else:
+                timestamp = time.strftime("%Y%m%d")
+                name = f"backup_{timestamp}.zip"
+                path = os.path.join(data_dir, name)
+            files = ["settings.json", "stats.json", "pomodoro.json", "clipboard.json", "note.txt"]
+            with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+                for filename in files:
+                    full = os.path.join(data_dir, filename)
+                    if os.path.exists(full):
+                        zf.write(full, filename)
+            self.backupCompleted.emit(path)
+        except Exception as exc:
+            logging.exception("backup failed: %s", exc)
+            self.backupCompleted.emit("")
+
+    @Slot(str)
+    def restoreBackup(self, path: str) -> None:
+        if not path:
+            return
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        data_dir = os.path.join(base_dir, "data")
+        try:
+            os.makedirs(data_dir, exist_ok=True)
+            with zipfile.ZipFile(path, "r") as zf:
+                zf.extractall(data_dir)
+            self.restoreCompleted.emit(path)
+        except Exception as exc:
+            logging.exception("restore failed: %s", exc)
+            self.restoreCompleted.emit("")
+
+    @Slot()
+    def openBackupDialog(self) -> None:
+        self.requestBackupDialog.emit()
 
     def requestOpenPanel(self, name: str) -> None:
         if name:

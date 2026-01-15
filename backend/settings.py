@@ -102,6 +102,8 @@ class AppSettings:
             "hotkey_toggle_pet": "Ctrl+Shift+L",
             "hotkey_note": "Ctrl+Shift+P",
             "hotkey_pomodoro": "Ctrl+Shift+T",
+            "last_login_date": "",
+            "login_streak": 0,
         }
         stored = self._data.get("settings", {})
         if not isinstance(stored, dict):
