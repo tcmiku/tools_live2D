@@ -102,6 +102,7 @@ tools_live2D/
 │   ├── binding_utils.py       # 模型动作/表情提取工具
 │   ├── launchers.py           # 快速启动器管理
 │   ├── hotkey_hints.py        # 热键提示文案生成
+```
 **新增模块说明：**
 - `login_rewards.py` - 每日登录奖励系统
 - `achievements.py` - 每日/每周成就总结
