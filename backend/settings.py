@@ -104,6 +104,8 @@ class AppSettings:
             "hotkey_toggle_pet": "Ctrl+Shift+L",
             "hotkey_note": "Ctrl+Shift+P",
             "hotkey_pomodoro": "Ctrl+Shift+T",
+            "hotkey_model_edit": "Ctrl+Shift+M",
+            "hotkey_launcher_panel": "Ctrl+Shift+Space",
             "last_login_date": "",
             "login_streak": 0,
             "model_edit_mode": False,

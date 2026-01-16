@@ -76,6 +76,7 @@ let noteState = "";
 let clipboardItems = [];
 let pomodoroState = null;
 let todoItems = [];
+let launcherData = { launchers: [], recent: [] };
 const interactionState = {
   dragging: false,
   lastX: 0,
@@ -291,6 +292,7 @@ function setupBindingPanel() {
   const savePresetBtn = document.getElementById("save-preset-btn");
   const exportBtn = document.getElementById("export-btn");
   const resetBtn = document.getElementById("reset-btn");
+  const desktopBtn = document.getElementById("open-desktop-binding");
   if (previewBtn) previewBtn.addEventListener("click", () => previewBinding());
   if (loopBtn) {
     loopBtn.addEventListener("click", () => {
@@ -304,6 +306,13 @@ function setupBindingPanel() {
       if (bindingLoopTimer) {
         clearInterval(bindingLoopTimer);
         bindingLoopTimer = null;
+      }
+    });
+  }
+  if (desktopBtn) {
+    desktopBtn.addEventListener("click", () => {
+      if (backend && typeof backend.openBindingDialog === "function") {
+        backend.openBindingDialog();
       }
     });
   }
@@ -507,6 +516,7 @@ function syncModelOptionsFromBackend() {
     return;
   }
   backend.getAvailableModels((list) => {
+    console.log("available models:", Array.isArray(list) ? list.length : 0);
     setModelOptions(list || []);
   });
 }
@@ -700,6 +710,7 @@ function closeAllPanels() {
     "passive-panel",
     "more-info-panel",
     "binding-panel",
+    "launcher-panel",
   ];
   panelIds.forEach((panelId) => {
     const panel = document.getElementById(panelId);
@@ -770,6 +781,7 @@ function toggleToolPanel(id) {
     "passive-panel",
     "more-info-panel",
     "binding-panel",
+    "launcher-panel",
   ];
   panels.forEach((panelId) => {
     const panel = document.getElementById(panelId);
@@ -795,6 +807,9 @@ function toggleToolPanel(id) {
   if (id === "todo-panel") {
     renderTodoList();
   }
+  if (id === "launcher-panel") {
+    loadLaunchers();
+  }
   if (id === "ai-panel") {
     syncAIConfig();
   }
@@ -811,7 +826,11 @@ function setupToolsPanel() {
   const clipboardBtn = document.getElementById("tool-clipboard");
   const sysBtn = document.getElementById("tool-sysinfo");
   const modelSwitchBtn = document.getElementById("tool-model-switch");
+  const launcherBtn = document.getElementById("tool-launcher");
   const bindingBtn = document.getElementById("tool-bindings");
+  if (launcherBtn) {
+    launcherBtn.innerHTML = '<span class="tool-icon">&#x1F5A5;</span>启动器';
+  }
   if (noteBtn) {
     noteBtn.addEventListener("click", () => toggleToolPanel("note-panel"));
   }
@@ -825,6 +844,9 @@ function setupToolsPanel() {
     modelSwitchBtn.addEventListener("click", () => {
       switchModel();
     });
+  }
+  if (launcherBtn) {
+    launcherBtn.addEventListener("click", () => toggleToolPanel("launcher-panel"));
   }
   if (bindingBtn) {
     bindingBtn.addEventListener("click", () => toggleToolPanel("binding-panel"));
@@ -1007,7 +1029,18 @@ function setupQuickToolbar() {
   const toggleBtn = document.getElementById("quick-toggle");
   const noteBtn = document.getElementById("quick-note");
   const pomoBtn = document.getElementById("quick-pomodoro");
+  const modelBtn = document.getElementById("quick-model");
+  const launcherBtn = document.getElementById("quick-launcher");
   const settingsBtn = document.getElementById("quick-settings");
+  const collapseBtn = document.getElementById("quick-collapse");
+
+  if (collapseBtn) {
+    collapseBtn.addEventListener("click", () => {
+      toolbar.classList.toggle("collapsed");
+      collapseBtn.textContent = toolbar.classList.contains("collapsed") ? "◂" : "▸";
+    });
+    collapseBtn.textContent = toolbar.classList.contains("collapsed") ? "◂" : "▸";
+  }
 
   if (toggleBtn) {
     toggleBtn.addEventListener("click", () => {
@@ -1023,6 +1056,12 @@ function setupQuickToolbar() {
   }
   if (pomoBtn) {
     pomoBtn.addEventListener("click", () => toggleToolPanel("pomodoro-panel"));
+  }
+  if (modelBtn) {
+    modelBtn.addEventListener("click", () => switchModel());
+  }
+  if (launcherBtn) {
+    launcherBtn.addEventListener("click", () => toggleToolPanel("launcher-panel"));
   }
   if (settingsBtn) {
     settingsBtn.addEventListener("click", () => toggleToolPanel("settings-panel"));
@@ -1850,8 +1889,9 @@ function initWebChannel() {
   new QWebChannel(qt.webChannelTransport, (channel) => {
     backend = channel.objects.backend;
 
-    const initial = backend.getInitialState();
-    handleStateUpdate(initial);
+      const initial = backend.getInitialState();
+      handleStateUpdate(initial);
+      loadLaunchers();
 
     if (pendingWindowDrag !== null) {
       setWindowDragAllowed(pendingWindowDrag);
@@ -1981,6 +2021,12 @@ function initWebChannel() {
         bindingState = data;
         bindingState.model_path = settingsState.model_path || "";
         syncBindingPanel();
+      });
+    }
+    if (backend.launchersUpdated) {
+      backend.launchersUpdated.connect((data) => {
+        launcherData = data || { launchers: [], recent: [] };
+        syncLauncherPanel();
       });
     }
 
@@ -2218,6 +2264,184 @@ function setupNotePanel() {
   });
 }
 
+function renderLauncherList(container, items) {
+  if (!container) return;
+  container.innerHTML = "";
+  items.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "launcher-item";
+    const left = document.createElement("div");
+    left.className = "launcher-meta";
+    const icon = document.createElement("span");
+    icon.className = "launcher-icon";
+    icon.textContent = item.icon || "🧩";
+    const name = document.createElement("span");
+    name.textContent = item.name || "未命名";
+    const tags = document.createElement("span");
+    tags.className = "launcher-tags";
+    tags.textContent = (item.tags || []).join(", ");
+    left.appendChild(icon);
+    left.appendChild(name);
+    if (tags.textContent) left.appendChild(tags);
+    const actions = document.createElement("div");
+    const runBtn = document.createElement("button");
+    runBtn.textContent = "打开";
+    runBtn.addEventListener("click", () => executeLauncher(item.id));
+    const editBtn = document.createElement("button");
+    editBtn.textContent = "编辑";
+    editBtn.addEventListener("click", () => editLauncher(item));
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "删除";
+    delBtn.addEventListener("click", () => deleteLauncher(item.id));
+    actions.appendChild(runBtn);
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+    row.appendChild(left);
+    row.appendChild(actions);
+    container.appendChild(row);
+  });
+}
+
+function syncLauncherPanel() {
+  const recentEl = document.getElementById("launcher-recent");
+  const listEl = document.getElementById("launcher-list");
+  const recentIds = launcherData.recent || [];
+  const lookup = new Map(launcherData.launchers.map((x) => [x.id, x]));
+  const recentItems = recentIds.map((id) => lookup.get(id)).filter(Boolean);
+  renderLauncherList(recentEl, recentItems);
+  renderLauncherList(listEl, launcherData.launchers || []);
+}
+
+function loadLaunchers() {
+  if (!backend || typeof backend.getLaunchers !== "function") return;
+  backend.getLaunchers((data) => {
+    launcherData = data || { launchers: [], recent: [] };
+    syncLauncherPanel();
+  });
+}
+
+function searchLaunchers(query) {
+  if (!backend || typeof backend.searchLaunchers !== "function") return;
+  backend.searchLaunchers(query || "", (data) => {
+    launcherData = data || { launchers: [], recent: [] };
+    syncLauncherPanel();
+  });
+}
+
+function executeLauncher(id) {
+  if (!backend || typeof backend.executeLauncher !== "function") return;
+  backend.executeLauncher(Number(id), (result) => {
+    if (result && result.message) logStatus(result.message);
+  });
+}
+
+function parseLauncherItems(raw) {
+  if (!raw) return [];
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("[")) {
+    try {
+      return JSON.parse(trimmed);
+    } catch (err) {
+      return [];
+    }
+  }
+  return trimmed
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .map((val) => ({ launcher_id: Number(val) }));
+}
+
+function editLauncher(item) {
+  const name = window.prompt("名称", item?.name || "");
+  if (!name) return;
+  const type = window.prompt("类型(web/app/group)", item?.type || "web") || "web";
+  const url = window.prompt("URL", item?.url || "") || "";
+  const path = window.prompt("路径", item?.path || "") || "";
+  const args = window.prompt("参数(空格分隔)", (item?.args || []).join(" ")) || "";
+  const icon = window.prompt("图标", item?.icon || "") || "";
+  const tags = window.prompt("标签(逗号分隔)", (item?.tags || []).join(",")) || "";
+  const hotkey = window.prompt("热键", item?.hotkey || "") || "";
+  const itemsRaw = type === "group" ? window.prompt("套件内容(launcher_id 列表或 JSON)", "") || "" : "";
+  const payload = {
+    id: item?.id,
+    name,
+    type,
+    url,
+    path,
+    args: args ? args.split(" ").filter(Boolean) : [],
+    icon,
+    tags: tags ? tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
+    hotkey,
+    items: parseLauncherItems(itemsRaw),
+  };
+  if (backend && typeof backend.saveLauncher === "function") {
+    backend.saveLauncher(payload);
+  }
+}
+
+function deleteLauncher(id) {
+  if (!window.confirm("确定删除该启动项？")) return;
+  if (backend && typeof backend.deleteLauncher === "function") {
+    backend.deleteLauncher(Number(id));
+  }
+}
+
+function exportLaunchers() {
+  if (!backend || typeof backend.exportLaunchers !== "function") return;
+  backend.exportLaunchers((data) => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "launchers.json";
+    link.click();
+    URL.revokeObjectURL(link.href);
+  });
+}
+
+function importLaunchers() {
+  if (!backend || typeof backend.importLaunchers !== "function") return;
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json";
+  input.addEventListener("change", () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result || "{}");
+        backend.importLaunchers(data);
+      } catch (err) {
+        logStatus("导入失败");
+      }
+    };
+    reader.readAsText(file);
+  });
+  input.click();
+}
+
+function setupLauncherPanel() {
+  const searchInput = document.getElementById("launcher-search");
+  const addBtn = document.getElementById("launcher-add");
+  const importBtn = document.getElementById("launcher-import");
+  const exportBtn = document.getElementById("launcher-export");
+  const desktopBtn = document.getElementById("launcher-desktop");
+  if (searchInput) {
+    searchInput.addEventListener("input", () => searchLaunchers(searchInput.value));
+  }
+  if (addBtn) addBtn.addEventListener("click", () => editLauncher({}));
+  if (importBtn) importBtn.addEventListener("click", () => importLaunchers());
+  if (exportBtn) exportBtn.addEventListener("click", () => exportLaunchers());
+  if (desktopBtn) {
+    desktopBtn.addEventListener("click", () => {
+      if (backend && typeof backend.openLauncherDialog === "function") {
+        backend.openLauncherDialog();
+      }
+    });
+  }
+}
+
 function loadClipboard() {
   if (!backend || typeof backend.getClipboardHistory !== "function") return;
   backend.getClipboardHistory((items) => {
@@ -2305,10 +2529,11 @@ setupContextMenu();
 setupEnterSend();
 setupChatPanelBehavior();
 setupSettingsPanel();
-setupNotePanel();
-setupClipboardPanel();
-setupToolsPanel();
-setupBindingPanel();
+  setupNotePanel();
+  setupClipboardPanel();
+  setupToolsPanel();
+  setupLauncherPanel();
+  setupBindingPanel();
 setupPomodoroPanel();
 setupReminderPanel();
 setupTodoPanel();

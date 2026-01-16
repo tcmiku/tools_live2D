@@ -7,7 +7,10 @@ from collections import deque
 from ctypes import wintypes
 from dataclasses import dataclass, replace
 
-from stats import FocusStats
+try:
+    from .stats import FocusStats
+except ImportError:
+    from stats import FocusStats
 
 
 @dataclass

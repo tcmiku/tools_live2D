@@ -3,7 +3,10 @@ from __future__ import annotations
 import time
 from typing import Tuple
 
-from settings import AppSettings
+try:
+    from .settings import AppSettings
+except ImportError:
+    from settings import AppSettings
 
 
 def calculate_reward(streak: int) -> int:

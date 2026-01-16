@@ -38,6 +38,8 @@ def parse_hotkey(text: str) -> Tuple[int, int] | None:
                 key = ord(upper)
             elif len(upper) == 1 and "0" <= upper <= "9":
                 key = ord(upper)
+            elif upper in ("SPACE", "SPACEBAR"):
+                key = 0x20
             elif upper.startswith("F") and upper[1:].isdigit():
                 num = int(upper[1:])
                 if 1 <= num <= 12:

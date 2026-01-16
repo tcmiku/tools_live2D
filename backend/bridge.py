@@ -9,15 +9,28 @@ from typing import Dict, Optional
 
 from PySide6.QtCore import QObject, Signal, Slot, QPoint
 
-from focus import FocusState
-from ai_client import AIClient
-from settings import AppSettings
-from model_bindings import ModelBindingManager, MotionBinding
-from clipboard import ClipboardHistory
-from notes import NoteStore
-from sysinfo import SystemInfo
-from pomodoro import PomodoroEngine
-from reminders import ReminderStore, ReminderEngine, ReminderConfig
+try:
+    from .focus import FocusState
+    from .ai_client import AIClient
+    from .settings import AppSettings
+    from .model_bindings import ModelBindingManager, MotionBinding
+    from .clipboard import ClipboardHistory
+    from .notes import NoteStore
+    from .sysinfo import SystemInfo
+    from .pomodoro import PomodoroEngine
+    from .reminders import ReminderStore, ReminderEngine, ReminderConfig
+    from .launchers import LauncherManager
+except ImportError:
+    from focus import FocusState
+    from ai_client import AIClient
+    from settings import AppSettings
+    from model_bindings import ModelBindingManager, MotionBinding
+    from clipboard import ClipboardHistory
+    from notes import NoteStore
+    from sysinfo import SystemInfo
+    from pomodoro import PomodoroEngine
+    from reminders import ReminderStore, ReminderEngine, ReminderConfig
+    from launchers import LauncherManager
 
 
 class BackendBridge(QObject):
@@ -41,6 +54,7 @@ class BackendBridge(QObject):
     requestBackupDialog = Signal()
     bindingsUpdated = Signal(dict)
     bindingPreview = Signal(str, str)
+    launchersUpdated = Signal(dict)
 
     def __init__(
         self,
@@ -50,6 +64,7 @@ class BackendBridge(QObject):
         reminders: ReminderEngine | None = None,
         reminder_store: ReminderStore | None = None,
         binding_manager: ModelBindingManager | None = None,
+        launcher_manager: LauncherManager | None = None,
     ) -> None:
         super().__init__()
         self._ai_client = ai_client
@@ -64,7 +79,10 @@ class BackendBridge(QObject):
         self._reminders = reminders
         self._reminder_store = reminder_store
         self._open_ai_dialog = None
+        self._open_binding_dialog = None
+        self._open_launcher_dialog = None
         self._binding_manager = binding_manager
+        self._launcher_manager = launcher_manager
         self._last_state: Dict[str, object] = {
             "status": "idle",
             "idle_ms": 0,
@@ -112,6 +130,12 @@ class BackendBridge(QObject):
 
     def set_open_ai_dialog(self, handler) -> None:
         self._open_ai_dialog = handler
+
+    def set_open_binding_dialog(self, handler) -> None:
+        self._open_binding_dialog = handler
+
+    def set_open_launcher_dialog(self, handler) -> None:
+        self._open_launcher_dialog = handler
 
     @Slot(bool)
     def setWindowDragEnabled(self, enabled: bool) -> None:
@@ -207,12 +231,14 @@ class BackendBridge(QObject):
             self.bindingsUpdated.emit(self._binding_manager.get_model(model_path))
 
     @Slot(result=list)
+    @Slot(result=list)
     def getAvailableModels(self) -> list:
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         web_dir = os.path.join(base_dir, "web")
         model_root = os.path.join(web_dir, "model")
         results = []
         if not os.path.isdir(model_root):
+            logging.info("model scan skipped: %s missing", model_root)
             return results
         for root, _dirs, files in os.walk(model_root):
             for filename in files:
@@ -223,6 +249,7 @@ class BackendBridge(QObject):
                 name = os.path.basename(root)
                 results.append({"name": name, "path": rel_path})
         results.sort(key=lambda item: item.get("name", ""))
+        logging.info("model scan: %d models", len(results))
         return results
 
     @Slot(bool)
@@ -395,6 +422,16 @@ class BackendBridge(QObject):
             self._open_ai_dialog()
 
     @Slot()
+    def openBindingDialog(self) -> None:
+        if self._open_binding_dialog:
+            self._open_binding_dialog()
+
+    @Slot()
+    def openLauncherDialog(self) -> None:
+        if self._open_launcher_dialog:
+            self._open_launcher_dialog()
+
+    @Slot()
     def togglePetWindow(self) -> None:
         if not self._window:
             return
@@ -446,8 +483,65 @@ class BackendBridge(QObject):
         self.requestBackupDialog.emit()
 
     def requestOpenPanel(self, name: str) -> None:
-        if name:
-            self.openPanel.emit(name)
+        if not name:
+            return
+        logging.info("request open panel: %s", name)
+        self.openPanel.emit(name)
+
+    @Slot(result=dict)
+    def getLaunchers(self) -> dict:
+        if not self._launcher_manager:
+            return {"launchers": [], "recent": []}
+        return self._launcher_manager.export_data()
+
+    @Slot(str, result=dict)
+    def searchLaunchers(self, query: str) -> dict:
+        if not self._launcher_manager:
+            return {"launchers": [], "recent": []}
+        items = self._launcher_manager.search(query)
+        return {"launchers": items, "recent": self._launcher_manager.get_recent_ids()}
+
+    @Slot(int, result=dict)
+    def executeLauncher(self, launcher_id: int) -> dict:
+        if not self._launcher_manager:
+            return {"ok": False, "message": "启动器未初始化"}
+        result = self._launcher_manager.execute(int(launcher_id))
+        payload = self._launcher_manager.export_data()
+        self.launchersUpdated.emit(payload)
+        return {"ok": result.ok, "message": result.message}
+
+    @Slot(dict, result=dict)
+    def saveLauncher(self, data: dict) -> dict:
+        if not self._launcher_manager:
+            return {"ok": False, "message": "启动器未初始化"}
+        saved = self._launcher_manager.save_launcher(data)
+        payload = self._launcher_manager.export_data()
+        self.launchersUpdated.emit(payload)
+        return {"ok": True, "launcher": saved}
+
+    @Slot(int, result=dict)
+    def deleteLauncher(self, launcher_id: int) -> dict:
+        if not self._launcher_manager:
+            return {"ok": False, "message": "启动器未初始化"}
+        ok = self._launcher_manager.delete_launcher(int(launcher_id))
+        payload = self._launcher_manager.export_data()
+        self.launchersUpdated.emit(payload)
+        return {"ok": ok}
+
+    @Slot(result=dict)
+    def exportLaunchers(self) -> dict:
+        if not self._launcher_manager:
+            return {}
+        return self._launcher_manager.export_data()
+
+    @Slot(dict, result=dict)
+    def importLaunchers(self, data: dict) -> dict:
+        if not self._launcher_manager:
+            return {"ok": False}
+        ok = self._launcher_manager.import_data(data)
+        payload = self._launcher_manager.export_data()
+        self.launchersUpdated.emit(payload)
+        return {"ok": ok}
 
     @Slot()
     def testAIConnection(self) -> None:

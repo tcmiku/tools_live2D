@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import logging
+import json
 import os
 import sys
 import time
@@ -31,26 +32,52 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
     QWidget,
+      QTabWidget,
+      QComboBox,
+      QListWidget,
+      QPlainTextEdit,
+    QTableWidgetItem,
+    QAbstractItemView,
     QGroupBox,
 )
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEngineSettings
 from PySide6.QtWebEngineWidgets import QWebEngineView
 
-from focus import FocusEngine, adjust_state_for_pomodoro
-from stats import FocusStats
-from ai_client import AIClient
-from bridge import BackendBridge
-from model_bindings import ModelBindingManager
-from settings import AppSettings
-from pomodoro import PomodoroEngine, reward_for_focus_minutes
-from achievements import build_daily_summary, build_weekly_summary
-from mood import compute_mood, mood_bucket, mood_interval_factor
-from hotkey_hints import build_hotkey_hint
-from hotkeys import HotkeyManager, HotkeyFilter, parse_hotkey
-from reminders import ReminderEngine, ReminderStore, ReminderConfig
-from login_rewards import apply_daily_login
-from passive_chat import PassiveChatEngine, PassiveChatConfig
+try:
+    from .focus import FocusEngine, adjust_state_for_pomodoro
+    from .stats import FocusStats
+    from .ai_client import AIClient
+    from .bridge import BackendBridge
+    from .model_bindings import ModelBindingManager, MotionBinding
+    from .settings import AppSettings
+    from .pomodoro import PomodoroEngine, reward_for_focus_minutes
+    from .achievements import build_daily_summary, build_weekly_summary
+    from .mood import compute_mood, mood_bucket, mood_interval_factor
+    from .hotkey_hints import build_hotkey_hint
+    from .hotkeys import HotkeyManager, HotkeyFilter, parse_hotkey
+    from .reminders import ReminderEngine, ReminderStore, ReminderConfig
+    from .login_rewards import apply_daily_login
+    from .passive_chat import PassiveChatEngine, PassiveChatConfig
+    from .binding_utils import extract_motions_expressions
+    from .launchers import LauncherManager
+except ImportError:
+    from focus import FocusEngine, adjust_state_for_pomodoro
+    from stats import FocusStats
+    from ai_client import AIClient
+    from bridge import BackendBridge
+    from model_bindings import ModelBindingManager, MotionBinding
+    from settings import AppSettings
+    from pomodoro import PomodoroEngine, reward_for_focus_minutes
+    from achievements import build_daily_summary, build_weekly_summary
+    from mood import compute_mood, mood_bucket, mood_interval_factor
+    from hotkey_hints import build_hotkey_hint
+    from hotkeys import HotkeyManager, HotkeyFilter, parse_hotkey
+    from reminders import ReminderEngine, ReminderStore, ReminderConfig
+    from login_rewards import apply_daily_login
+    from passive_chat import PassiveChatEngine, PassiveChatConfig
+from binding_utils import extract_motions_expressions, list_model_paths
+from launchers import LauncherManager
 
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -257,9 +284,13 @@ class SettingsDialog(QDialog):
         self.hotkey_toggle = QLineEdit()
         self.hotkey_note = QLineEdit()
         self.hotkey_pomodoro = QLineEdit()
+        self.hotkey_model_edit = QLineEdit()
+        self.hotkey_launcher = QLineEdit()
         self.hotkey_toggle.setPlaceholderText("Ctrl+Shift+L")
         self.hotkey_note.setPlaceholderText("Ctrl+Shift+P")
         self.hotkey_pomodoro.setPlaceholderText("Ctrl+Shift+T")
+        self.hotkey_model_edit.setPlaceholderText("Ctrl+Shift+M")
+        self.hotkey_launcher.setPlaceholderText("Ctrl+Shift+Space")
 
         self.model_edit_mode_btn = QPushButton("开启模型编辑模式")
         self.model_edit_mode_btn.setCheckable(True)
@@ -280,6 +311,8 @@ class SettingsDialog(QDialog):
         form.addRow("热键：显示/隐藏", self.hotkey_toggle)
         form.addRow("热键：快速便签", self.hotkey_note)
         form.addRow("热键：番茄钟", self.hotkey_pomodoro)
+        form.addRow("热键：模型编辑", self.hotkey_model_edit)
+        form.addRow("热键：启动面板", self.hotkey_launcher)
         form.addRow(self.model_edit_mode_btn)
 
         self.buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
@@ -300,6 +333,8 @@ class SettingsDialog(QDialog):
         self.hotkey_toggle.setText(str(data.get("hotkey_toggle_pet", "Ctrl+Shift+L")))
         self.hotkey_note.setText(str(data.get("hotkey_note", "Ctrl+Shift+P")))
         self.hotkey_pomodoro.setText(str(data.get("hotkey_pomodoro", "Ctrl+Shift+T")))
+        self.hotkey_model_edit.setText(str(data.get("hotkey_model_edit", "Ctrl+Shift+M")))
+        self.hotkey_launcher.setText(str(data.get("hotkey_launcher_panel", "Ctrl+Shift+Space")))
         edit_mode = bool(data.get("model_edit_mode", False))
         self.model_edit_mode_btn.setChecked(edit_mode)
         self.model_edit_mode_btn.setText("关闭模型编辑模式" if edit_mode else "开启模型编辑模式")
@@ -320,6 +355,8 @@ class SettingsDialog(QDialog):
             "hotkey_toggle_pet": self.hotkey_toggle.text().strip(),
             "hotkey_note": self.hotkey_note.text().strip(),
             "hotkey_pomodoro": self.hotkey_pomodoro.text().strip(),
+            "hotkey_model_edit": self.hotkey_model_edit.text().strip(),
+            "hotkey_launcher_panel": self.hotkey_launcher.text().strip(),
             "model_edit_mode": bool(self.model_edit_mode_btn.isChecked()),
         }
 
@@ -427,6 +464,478 @@ class AIProviderDialog(QDialog):
         return providers
 
 
+class BindingDialog(QDialog):
+    def __init__(
+        self,
+        settings: AppSettings,
+        binding_manager: ModelBindingManager,
+        preview_handler=None,
+        parent=None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("动作绑定")
+        self.resize(640, 520)
+        self.setStyleSheet(
+            "QDialog { background: #f7f7f5; }"
+            "QLabel { color: #1f1f1f; font-size: 12px; }"
+            "QComboBox {"
+            "  background: #ffffff;"
+            "  border: 1px solid #c9c9c9;"
+            "  border-radius: 6px;"
+            "  padding: 3px 6px;"
+            "}"
+            "QTabWidget::pane { border: 1px solid #d5d5d5; background: #ffffff; }"
+            "QTabBar::tab {"
+            "  background: #e8e8e8;"
+            "  padding: 6px 10px;"
+            "  border-top-left-radius: 6px;"
+            "  border-top-right-radius: 6px;"
+            "  margin-right: 4px;"
+            "}"
+            "QTabBar::tab:selected { background: #ffffff; border: 1px solid #d5d5d5; }"
+            "QTableWidget { background: #ffffff; border: 1px solid #d5d5d5; }"
+            "QHeaderView::section { background: #ededed; padding: 4px; border: none; }"
+            "QComboBox QAbstractItemView { background: #ffffff; selection-background-color: #2f6fed; }"
+            "QPushButton {"
+            "  background: #2f6fed;"
+            "  color: white;"
+            "  border: none;"
+            "  border-radius: 6px;"
+            "  padding: 4px 10px;"
+            "}"
+            "QPushButton:hover { background: #2558c9; }"
+        )
+        self._settings = settings
+        self._binding_manager = binding_manager
+        self._preview_handler = preview_handler
+        self._model_path = ""
+        self._motions: list[str] = []
+        self._expressions: list[str] = []
+        self._tables: dict[str, QTableWidget] = {}
+        self._category_defs = {
+            "心情": [("开心", "开心"), ("愉快", "愉快"), ("平静", "平静"), ("低落", "低落"), ("孤独", "孤独")],
+            "状态": [("active", "活跃"), ("idle", "空闲"), ("sleep", "睡眠"), ("paused", "暂停")],
+            "番茄钟": [("focus", "专注"), ("break", "休息"), ("completed", "完成")],
+            "AI": [("greeting", "问候"), ("cheer", "鼓励"), ("reminder", "提醒"), ("farewell", "告别")],
+            "互动": [("click", "点击"), ("petting", "抚摸"), ("drag", "拖拽")],
+        }
+
+        self.model_combo = QComboBox()
+        self.model_combo.currentIndexChanged.connect(self._on_model_changed)
+        refresh_btn = QPushButton("刷新动作列表")
+        refresh_btn.clicked.connect(self._refresh_model_lists)
+        preview_btn = QPushButton("预览当前行")
+        preview_btn.clicked.connect(self._preview_current_binding)
+
+        top_layout = QHBoxLayout()
+        top_layout.addWidget(QLabel("当前模型"))
+        top_layout.addWidget(self.model_combo, 1)
+        top_layout.addWidget(refresh_btn)
+        top_layout.addWidget(preview_btn)
+
+        self.tabs = QTabWidget()
+        for title in self._category_defs.keys():
+            table = QTableWidget()
+            table.setColumnCount(3)
+            table.setHorizontalHeaderLabels(["类型", "动作", "表情"])
+            table.horizontalHeader().setStretchLastSection(True)
+            table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+            table.setSelectionBehavior(QAbstractItemView.SelectRows)
+            table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+            self.tabs.addTab(table, title)
+            self._tables[title] = table
+
+        reset_btn = QPushButton("重置本模型绑定")
+        reset_btn.clicked.connect(self._reset_model_bindings)
+        close_btn = QPushButton("关闭")
+        close_btn.clicked.connect(self.close)
+
+        bottom_layout = QHBoxLayout()
+        bottom_layout.addStretch(1)
+        bottom_layout.addWidget(reset_btn)
+        bottom_layout.addWidget(close_btn)
+
+        main_layout = QVBoxLayout()
+        main_layout.addLayout(top_layout)
+        main_layout.addWidget(self.tabs, 1)
+        main_layout.addLayout(bottom_layout)
+        self.setLayout(main_layout)
+
+        self._reload_models()
+
+    def _reload_models(self) -> None:
+        current = self._settings.get_settings().get("model_path", "")
+        model_paths = list_model_paths(BASE_DIR)
+        for path in self._binding_manager.get_all_models().keys():
+            if path not in model_paths:
+                model_paths.append(path)
+        if current and current not in model_paths:
+            model_paths.insert(0, current)
+        self.model_combo.blockSignals(True)
+        self.model_combo.clear()
+        for path in model_paths:
+            name = self._binding_manager.get_model(path).get("name", path)
+            self.model_combo.addItem(name, path)
+        self.model_combo.blockSignals(False)
+        if model_paths:
+            if current:
+                index = self.model_combo.findData(current)
+                if index >= 0:
+                    self.model_combo.setCurrentIndex(index)
+            else:
+                self.model_combo.setCurrentIndex(0)
+        else:
+            self._model_path = ""
+            self._refresh_tables()
+
+    def _on_model_changed(self) -> None:
+        self._model_path = self.model_combo.currentData() or ""
+        self._refresh_model_lists()
+
+    def _refresh_model_lists(self) -> None:
+        self._motions, self._expressions = extract_motions_expressions(BASE_DIR, self._model_path)
+        self._refresh_tables()
+
+    def _refresh_tables(self) -> None:
+        for title, keys in self._category_defs.items():
+            table = self._tables[title]
+            table.setRowCount(len(keys))
+            for row, (key, label) in enumerate(keys):
+                item = QTableWidgetItem(label)
+                item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                item.setData(Qt.UserRole, key)
+                table.setItem(row, 0, item)
+
+                binding = self._binding_manager.get_binding(self._model_path, self._category_key(title), key)
+                motion_combo = self._create_combo(self._motions, binding.motion or "", title, key, "motion")
+                expr_combo = self._create_combo(self._expressions, binding.expression or "", title, key, "expression")
+                table.setCellWidget(row, 1, motion_combo)
+                table.setCellWidget(row, 2, expr_combo)
+
+    def _category_key(self, title: str) -> str:
+        mapping = {
+            "心情": "mood",
+            "状态": "status",
+            "番茄钟": "pomodoro",
+            "AI": "ai",
+            "互动": "interaction",
+        }
+        return mapping.get(title, title)
+
+    def _create_combo(self, items: list[str], current: str, category: str, key: str, field: str) -> QComboBox:
+        combo = QComboBox()
+        options = [""] + list(items)
+        if current and current not in options:
+            options.insert(1, current)
+        for option in options:
+            combo.addItem(option)
+        index = combo.findText(current) if current else 0
+        combo.setCurrentIndex(index if index >= 0 else 0)
+        combo.currentTextChanged.connect(
+            lambda text, cat=category, k=key, f=field: self._update_binding(cat, k, f, text)
+        )
+        return combo
+
+    def _update_binding(self, title: str, key: str, field: str, value: str) -> None:
+        if not self._model_path:
+            return
+        category = self._category_key(title)
+        current = self._binding_manager.get_binding(self._model_path, category, key)
+        motion = current.motion
+        expression = current.expression
+        if field == "motion":
+            motion = value or None
+        else:
+            expression = value or None
+        self._binding_manager.set_binding(self._model_path, category, key, MotionBinding(motion, expression))
+
+    def _reset_model_bindings(self) -> None:
+        if not self._model_path:
+            return
+        self._binding_manager.reset_model(self._model_path)
+        self._refresh_tables()
+
+    def _preview_current_binding(self) -> None:
+        if not self._preview_handler:
+            return
+        current_tab = self.tabs.currentWidget()
+        if not isinstance(current_tab, QTableWidget):
+            return
+        row = current_tab.currentRow()
+        if row < 0:
+            return
+        item = current_tab.item(row, 0)
+        if not item:
+            return
+        key = item.data(Qt.UserRole)
+        if not key:
+            return
+        title = self.tabs.tabText(self.tabs.currentIndex())
+        category = self._category_key(title)
+        binding = self._binding_manager.get_binding(self._model_path, category, key)
+        self._preview_handler(binding.motion or "", binding.expression or "")
+
+
+class LauncherEditorDialog(QDialog):
+    def __init__(self, manager: LauncherManager, parent=None) -> None:
+        super().__init__(parent)
+        self._manager = manager
+        self._current_id: int | None = None
+
+        self.setWindowTitle("启动器编辑")
+        self.setMinimumSize(760, 480)
+        self.setStyleSheet(
+            "QDialog { background: #f7f7f5; }"
+            "QLabel { color: #1f1f1f; font-size: 12px; }"
+            "QLineEdit, QPlainTextEdit, QComboBox {"
+            " background: #ffffff; color: #1f1f1f; border: 1px solid #d5d5d5; border-radius: 6px; padding: 4px;"
+            "}"
+            "QListWidget { background: #ffffff; border: 1px solid #d5d5d5; }"
+            "QPushButton { background: #2f6fed; color: white; border: none; border-radius: 6px; padding: 6px 12px; }"
+            "QPushButton:disabled { background: #b8b8b8; }"
+        )
+
+        layout = QHBoxLayout(self)
+        self.list = QListWidget()
+        self.list.setMinimumWidth(220)
+        layout.addWidget(self.list)
+
+        form_wrap = QVBoxLayout()
+        form = QFormLayout()
+
+        self.name_edit = QLineEdit()
+        self.type_combo = QComboBox()
+        self.type_combo.addItems(["web", "app", "group"])
+        self.url_edit = QLineEdit()
+        self.path_edit = QLineEdit()
+        self.args_edit = QLineEdit()
+        self.tags_edit = QLineEdit()
+        self.icon_edit = QLineEdit()
+        self.hotkey_edit = QLineEdit()
+        self.items_edit = QPlainTextEdit()
+        self.items_edit.setPlaceholderText("group 类型：填写 launcher_id 列表或 JSON")
+        self.usage_label = QLabel("-")
+
+        path_row = QHBoxLayout()
+        path_row.setContentsMargins(0, 0, 0, 0)
+        self.path_btn = QPushButton("浏览")
+        self.path_btn.setFixedWidth(60)
+        path_row.addWidget(self.path_edit)
+        path_row.addWidget(self.path_btn)
+        path_container = QWidget()
+        path_container.setLayout(path_row)
+
+        form.addRow("名称", self.name_edit)
+        form.addRow("类型", self.type_combo)
+        form.addRow("URL", self.url_edit)
+        form.addRow("路径", path_container)
+        form.addRow("参数(空格分隔)", self.args_edit)
+        form.addRow("标签(逗号分隔)", self.tags_edit)
+        form.addRow("图标", self.icon_edit)
+        form.addRow("热键", self.hotkey_edit)
+        form.addRow("套件内容", self.items_edit)
+        form.addRow("使用次数", self.usage_label)
+
+        form_wrap.addLayout(form)
+
+        actions = QHBoxLayout()
+        self.new_btn = QPushButton("新增")
+        self.save_btn = QPushButton("保存")
+        self.delete_btn = QPushButton("删除")
+        self.run_btn = QPushButton("执行")
+        self.import_btn = QPushButton("导入")
+        self.export_btn = QPushButton("导出")
+        self.close_btn = QPushButton("关闭")
+        actions.addWidget(self.new_btn)
+        actions.addWidget(self.save_btn)
+        actions.addWidget(self.delete_btn)
+        actions.addWidget(self.run_btn)
+        actions.addWidget(self.import_btn)
+        actions.addWidget(self.export_btn)
+        actions.addWidget(self.close_btn)
+
+        form_wrap.addLayout(actions)
+        layout.addLayout(form_wrap)
+
+        self.list.currentItemChanged.connect(self._on_select)
+        self.type_combo.currentTextChanged.connect(self._sync_type_fields)
+        self.new_btn.clicked.connect(self._new_item)
+        self.save_btn.clicked.connect(self._save_item)
+        self.delete_btn.clicked.connect(self._delete_item)
+        self.run_btn.clicked.connect(self._run_item)
+        self.import_btn.clicked.connect(self._import_data)
+        self.export_btn.clicked.connect(self._export_data)
+        self.close_btn.clicked.connect(self.close)
+        self.path_btn.clicked.connect(self._select_path)
+
+        self.refresh_list()
+        self._sync_type_fields(self.type_combo.currentText())
+
+    def refresh_list(self, select_id: int | None = None) -> None:
+        self.list.clear()
+        items = self._manager.get_all()
+        for item in items:
+            name = str(item.get("name", "未命名"))
+            kind = str(item.get("type", "web"))
+            label = f"{name} ({kind})"
+            self.list.addItem(label)
+        if select_id is not None:
+            for idx, item in enumerate(items):
+                if int(item.get("id", 0)) == int(select_id):
+                    self.list.setCurrentRow(idx)
+                    break
+        elif items:
+            self.list.setCurrentRow(0)
+
+    def _selected_item(self) -> dict | None:
+        row = self.list.currentRow()
+        items = self._manager.get_all()
+        if 0 <= row < len(items):
+            return items[row]
+        return None
+
+    def _on_select(self) -> None:
+        item = self._selected_item()
+        if not item:
+            self._clear_form()
+            return
+        self._current_id = int(item.get("id", 0))
+        self.name_edit.setText(str(item.get("name", "")))
+        self.type_combo.setCurrentText(str(item.get("type", "web")))
+        self.url_edit.setText(str(item.get("url", "")))
+        self.path_edit.setText(str(item.get("path", "")))
+        self.args_edit.setText(" ".join(item.get("args", []) or []))
+        self.tags_edit.setText(", ".join(item.get("tags", []) or []))
+        self.icon_edit.setText(str(item.get("icon", "")))
+        self.hotkey_edit.setText(str(item.get("hotkey", "")))
+        self.items_edit.setPlainText(self._format_items(item.get("items", [])))
+        self.usage_label.setText(str(item.get("usage_count", 0)))
+        self._sync_type_fields(self.type_combo.currentText())
+
+    def _clear_form(self) -> None:
+        self._current_id = None
+        self.name_edit.clear()
+        self.url_edit.clear()
+        self.path_edit.clear()
+        self.args_edit.clear()
+        self.tags_edit.clear()
+        self.icon_edit.clear()
+        self.hotkey_edit.clear()
+        self.items_edit.setPlainText("")
+        self.usage_label.setText("-")
+
+    def _new_item(self) -> None:
+        self.list.clearSelection()
+        self._clear_form()
+
+    def _collect_payload(self) -> dict:
+        return {
+            "id": self._current_id,
+            "name": self.name_edit.text().strip() or "未命名",
+            "type": self.type_combo.currentText().strip(),
+            "url": self.url_edit.text().strip(),
+            "path": self.path_edit.text().strip(),
+            "args": [x for x in self.args_edit.text().split(" ") if x],
+            "tags": [x.strip() for x in self.tags_edit.text().split(",") if x.strip()],
+            "icon": self.icon_edit.text().strip(),
+            "hotkey": self.hotkey_edit.text().strip(),
+            "items": self._parse_items(self.items_edit.toPlainText()),
+        }
+
+    def _save_item(self) -> None:
+        payload = self._collect_payload()
+        saved = self._manager.save_launcher(payload)
+        self.refresh_list(select_id=int(saved.get("id", 0)))
+        logging.info("launcher saved: %s", saved.get("name", ""))
+
+    def _delete_item(self) -> None:
+        if not self._current_id:
+            return
+        result = QMessageBox.question(self, "删除启动项", "确认删除当前启动项？")
+        if result != QMessageBox.Yes:
+            return
+        if self._manager.delete_launcher(int(self._current_id)):
+            logging.info("launcher deleted: %s", self._current_id)
+        self.refresh_list()
+
+    def _run_item(self) -> None:
+        if not self._current_id:
+            return
+        result = self._manager.execute(int(self._current_id))
+        QMessageBox.information(self, "启动结果", result.message)
+
+    def _select_path(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "选择应用程序")
+        if path:
+            self.path_edit.setText(path)
+
+    def _import_data(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "导入启动项", filter="JSON 文件 (*.json)")
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if self._manager.import_data(data):
+                logging.info("launcher import success")
+            self.refresh_list()
+        except Exception as exc:
+            logging.exception("launcher import failed: %s", exc)
+            QMessageBox.warning(self, "导入失败", "无法导入该文件")
+
+    def _export_data(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(self, "导出启动项", "launchers.json", "JSON 文件 (*.json)")
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self._manager.export_data(), f, ensure_ascii=False, indent=2)
+            logging.info("launcher export success: %s", path)
+        except Exception as exc:
+            logging.exception("launcher export failed: %s", exc)
+            QMessageBox.warning(self, "导出失败", "无法写入文件")
+
+    def _parse_items(self, text: str) -> list:
+        raw = text.strip()
+        if not raw:
+            return []
+        if raw.startswith("["):
+            try:
+                data = json.loads(raw)
+                return data if isinstance(data, list) else []
+            except json.JSONDecodeError:
+                return []
+        items = []
+        for part in raw.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                items.append({"launcher_id": int(part)})
+            except ValueError:
+                continue
+        return items
+
+    def _format_items(self, items: list) -> str:
+        if not items:
+            return ""
+        try:
+            return json.dumps(items, ensure_ascii=False, indent=2)
+        except TypeError:
+            return ""
+
+    def _sync_type_fields(self, kind: str) -> None:
+        kind = kind or "web"
+        is_web = kind == "web"
+        is_app = kind == "app"
+        is_group = kind == "group"
+        self.url_edit.setEnabled(is_web)
+        self.path_edit.setEnabled(is_app)
+        self.path_btn.setEnabled(is_app)
+        self.args_edit.setEnabled(is_app)
+        self.items_edit.setEnabled(is_group)
+
+
 def main() -> None:
     os.makedirs(LOG_DIR, exist_ok=True)
     logging.basicConfig(
@@ -463,6 +972,8 @@ def main() -> None:
     if not os.path.isabs(bindings_path):
         bindings_path = os.path.join(BASE_DIR, bindings_path)
     binding_manager = ModelBindingManager(bindings_path)
+    launchers_path = os.path.join(BASE_DIR, "data", "launchers.json")
+    launcher_manager = LauncherManager(launchers_path)
     bridge = BackendBridge(
         ai_client,
         settings=settings,
@@ -470,6 +981,7 @@ def main() -> None:
         reminders=reminders,
         reminder_store=reminder_store,
         binding_manager=binding_manager,
+        launcher_manager=launcher_manager,
     )
 
     tray_icon_path = os.path.join(ASSETS_DIR, "tray_icon.png")
@@ -503,9 +1015,10 @@ def main() -> None:
             msg.setText(focus_text)
             msg.setStandardButtons(QMessageBox.Ok)
             msg.setStyleSheet(
-                "QMessageBox { background-color: #1f1f1f; }"
-                "QLabel { color: #f2f2f2; font-size: 13px; }"
-                "QPushButton { min-width: 72px; padding: 4px 10px; }"
+                "QMessageBox { background-color: #f7f7f5; }"
+                "QLabel { color: #1f1f1f; font-size: 13px; }"
+                "QPushButton { min-width: 72px; padding: 4px 10px; "
+                "background: #2f6fed; color: white; border: none; border-radius: 6px; }"
             )
             result = msg.exec()
             logging.info("show stats dialog closed: %s", result)
@@ -551,6 +1064,31 @@ def main() -> None:
             bridge.setAISettings({"ai_providers": providers})
 
     ai_detail_action.triggered.connect(open_ai_detail)
+
+    binding_dialog = None
+    launcher_dialog = None
+
+    def open_binding_dialog() -> None:
+        nonlocal binding_dialog
+        if binding_dialog is None:
+            binding_dialog = BindingDialog(
+                settings,
+                binding_manager,
+                preview_handler=lambda motion, expression: bridge.bindingPreview.emit(motion or "", expression or ""),
+                parent=window,
+            )
+        binding_dialog.show()
+        binding_dialog.raise_()
+        binding_dialog.activateWindow()
+
+    def open_launcher_dialog() -> None:
+        nonlocal launcher_dialog
+        if launcher_dialog is None:
+            launcher_dialog = LauncherEditorDialog(launcher_manager, parent=window)
+        launcher_dialog.refresh_list()
+        launcher_dialog.show()
+        launcher_dialog.raise_()
+        launcher_dialog.activateWindow()
 
     position_menu = QMenu("窗口位置")
 
@@ -626,6 +1164,8 @@ def main() -> None:
     window.show()
     bridge.set_window(window)
     bridge.set_open_ai_dialog(open_ai_detail)
+    bridge.set_open_binding_dialog(open_binding_dialog)
+    bridge.set_open_launcher_dialog(open_launcher_dialog)
     logging.info("window shown")
     hint_window = HotkeyHintWindow(window)
     hint_window.set_text(build_hotkey_hint(settings.get_settings()))
@@ -676,32 +1216,86 @@ def main() -> None:
         def toggle_pomodoro() -> None:
             pomodoro.toggle()
 
+        def toggle_model_edit() -> None:
+            current = settings.get_settings().get("model_edit_mode", False)
+            bridge.setSettings({"model_edit_mode": not bool(current)})
+
+        def open_launcher_panel() -> None:
+            logging.info("hotkey open launcher panel")
+            bridge.requestOpenPanel("launcher-panel")
+
         handlers = {
             1: toggle_pet,
             2: open_note,
             3: toggle_pomodoro,
+            4: toggle_model_edit,
+            5: open_launcher_panel,
         }
         hotkey_filter = HotkeyFilter(handlers)
         app.installNativeEventFilter(hotkey_filter)
+        app._hotkey_filter = hotkey_filter
 
         def register_hotkeys(data: dict) -> None:
             hotkey_manager.unregister_all()
+            handlers.clear()
+            handlers.update(
+                {
+                    1: toggle_pet,
+                    2: open_note,
+                    3: toggle_pomodoro,
+                    4: toggle_model_edit,
+                    5: open_launcher_panel,
+                }
+            )
             mapping = [
                 (1, data.get("hotkey_toggle_pet", "Ctrl+Shift+L")),
                 (2, data.get("hotkey_note", "Ctrl+Shift+P")),
                 (3, data.get("hotkey_pomodoro", "Ctrl+Shift+T")),
+                (4, data.get("hotkey_model_edit", "Ctrl+Shift+M")),
+                (5, data.get("hotkey_launcher_panel", "Ctrl+Shift+Space")),
             ]
+            used = set()
             for hotkey_id, text in mapping:
                 parsed = parse_hotkey(str(text))
                 if not parsed:
                     logging.warning("hotkey parse failed: %s", text)
                     continue
                 modifiers, key = parsed
+                if (modifiers, key) in used:
+                    logging.warning("hotkey conflict: %s", text)
+                    continue
+                used.add((modifiers, key))
                 if not hotkey_manager.register(hotkey_id, modifiers, key):
                     logging.warning("hotkey register failed: %s", text)
+                else:
+                    logging.info("hotkey registered: %s", text)
+
+            # launcher item hotkeys
+            for item in launcher_manager.get_all():
+                if not isinstance(item, dict):
+                    continue
+                hotkey_text = str(item.get("hotkey", "")).strip()
+                if not hotkey_text:
+                    continue
+                parsed = parse_hotkey(hotkey_text)
+                if not parsed:
+                    logging.warning("launcher hotkey parse failed: %s", hotkey_text)
+                    continue
+                modifiers, key = parsed
+                if (modifiers, key) in used:
+                    logging.warning("launcher hotkey conflict: %s", hotkey_text)
+                    continue
+                hotkey_id = 1000 + int(item.get("id", 0))
+                handlers[hotkey_id] = lambda launcher_id=int(item.get("id", 0)): bridge.executeLauncher(launcher_id)
+                used.add((modifiers, key))
+                if not hotkey_manager.register(hotkey_id, modifiers, key):
+                    logging.warning("launcher hotkey register failed: %s", hotkey_text)
+                else:
+                    logging.info("launcher hotkey registered: %s", hotkey_text)
 
     register_hotkeys(settings.get_settings())
     bridge.settingsUpdated.connect(register_hotkeys)
+    bridge.launchersUpdated.connect(lambda _data: register_hotkeys(settings.get_settings()))
     app.aboutToQuit.connect(hotkey_manager.unregister_all)
 
     def apply_passive_config_for_mood(mood_value: int) -> None:

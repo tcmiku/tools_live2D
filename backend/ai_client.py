@@ -8,7 +8,9 @@ from typing import TYPE_CHECKING
 
 import requests
 
-if TYPE_CHECKING:
+try:
+    from .settings import AppSettings
+except ImportError:
     from settings import AppSettings
 
 

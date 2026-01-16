@@ -321,7 +321,83 @@
         margin-bottom: 6px;
       }
       #binding-panel .preview-area button,
-      #binding-panel .actions button {
+      #launcher-panel {
+        width: min(480px, calc(100vw - 24px));
+        max-width: 480px;
+      }
+      .launcher-search {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+.launcher-search input {
+        flex: 1;
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #fff;
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 12px;
+      }
+.launcher-actions button, .launcher-search button {
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(0, 0, 0, 0.2);
+        color: #fff;
+        border-radius: 6px;
+        font-size: 11px;
+        padding: 4px 8px;
+        cursor: pointer;
+      }
+.launcher-section {
+        margin-bottom: 10px;
+      }
+.launcher-section-title {
+        font-size: 11px;
+        opacity: 0.8;
+        margin-bottom: 6px;
+      }
+.launcher-list {
+        display: grid;
+        gap: 6px;
+      }
+.launcher-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+.launcher-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+      }
+.launcher-icon {
+        font-size: 16px;
+      }
+.launcher-tags {
+        font-size: 10px;
+        opacity: 0.7;
+      }
+.launcher-actions {
+        display: flex;
+        gap: 6px;
+        justify-content: flex-end;
+      }
+.launcher-item button {
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(0, 0, 0, 0.2);
+        color: #fff;
+        border-radius: 6px;
+        font-size: 10px;
+        padding: 2px 6px;
+        cursor: pointer;
+      }
+#binding-panel .actions button {
         border: 1px solid rgba(255, 255, 255, 0.2);
         background: rgba(0, 0, 0, 0.2);
         color: #fff;
@@ -701,10 +777,18 @@
         box-shadow: 0 12px 24px rgba(8, 12, 20, 0.35);
         z-index: 14;
         opacity: 0.85;
-        transition: opacity 0.2s ease, transform 0.2s ease;
-        user-select: none;
+        overflow: hidden;
+        max-width: 360px;        transition: max-width 0.2s ease, padding 0.2s ease, opacity 0.2s ease;
       }
-      #quick-toolbar.hidden {
+      #quick-toolbar.collapsed {
+        padding: 6px;
+        max-width: 40px;
+        gap: 0;
+      }
+#quick-toolbar.collapsed .quick-btn:not(.collapse-btn) {
+        display: none;
+      }
+#quick-toolbar.hidden {
         opacity: 0.2;
       }
       #quick-toolbar:hover {
@@ -745,11 +829,14 @@
       <canvas id="canvas"></canvas>
       <div id="speech-bubble"></div>
     <div id="quick-toolbar">
-      <button id="quick-toggle" class="quick-btn" title="显示/隐藏">🎯</button>
-      <button id="quick-note" class="quick-btn" title="便签">📝</button>
-      <button id="quick-pomodoro" class="quick-btn" title="番茄钟">⏰</button>
-      <button id="quick-settings" class="quick-btn" title="设置">⚙️</button>
-    </div>
+        <button id="quick-toggle" class="quick-btn" data-tooltip="显示/隐藏">&#x1F3AF;</button>
+        <button id="quick-note" class="quick-btn" data-tooltip="便签">&#x1F4DD;</button>
+        <button id="quick-pomodoro" class="quick-btn" data-tooltip="番茄钟">&#x23F0;</button>
+        <button id="quick-model" class="quick-btn" data-tooltip="切换模型">&#x1F3AD;</button>
+        <button id="quick-launcher" class="quick-btn" data-tooltip="启动器">&#x1F5A5;</button>
+        <button id="quick-settings" class="quick-btn" data-tooltip="设置">&#9881;</button>
+        <button id="quick-collapse" class="quick-btn collapse-btn" data-tooltip="展开/收起">&#x25C0;</button>
+      </div>
       <div id="chat-panel" class="collapsed">
         <div id="chat-handle">
           <span class="label">聊天</span>
@@ -824,7 +911,31 @@
         <button id="tool-clipboard" type="button">剪贴板历史</button>
         <button id="tool-sysinfo" type="button">系统信息</button>
         <button id="tool-model-switch" type="button"><span class="tool-icon">&#x21bb;</span>切换模型</button>
+        <button id="tool-launcher" type="button"><span class="tool-icon">&#x1F5A5;</span>启动器</button>
         <button id="tool-bindings" type="button">动作绑定</button>
+      </div>
+    </div>
+    <div id="launcher-panel" class="tool-panel">
+      <div class="panel-title">
+        启动器
+        <button class="panel-close" data-close="launcher-panel" type="button">×</button>
+      </div>
+      <div class="launcher-search">
+        <input id="launcher-search" type="text" placeholder="搜索启动项..." />
+        <button id="launcher-add" type="button">添加</button>
+      </div>
+      <div class="launcher-actions">
+        <button id="launcher-import" type="button">导入</button>
+        <button id="launcher-export" type="button">导出</button>
+        <button id="launcher-desktop" type="button">在窗口中打开</button>
+      </div>
+      <div class="launcher-section">
+        <div class="launcher-section-title">最近使用</div>
+        <div id="launcher-recent" class="launcher-list"></div>
+      </div>
+      <div class="launcher-section">
+        <div class="launcher-section-title">全部</div>
+        <div id="launcher-list" class="launcher-list"></div>
       </div>
     </div>
     <div id="note-panel" class="tool-panel">
@@ -1014,12 +1125,13 @@
         <button id="loop-btn" type="button">循环预览</button>
         <button id="stop-btn" type="button">停止</button>
       </div>
-      <div class="actions">
-        <button id="apply-preset-btn" type="button">应用预设</button>
-        <button id="save-preset-btn" type="button">保存为预设</button>
-        <button id="export-btn" type="button">导出</button>
-        <button id="reset-btn" type="button">重置为默认</button>
-      </div>
+        <div class="actions">
+          <button id="apply-preset-btn" type="button">应用预设</button>
+          <button id="save-preset-btn" type="button">保存为预设</button>
+          <button id="export-btn" type="button">导出</button>
+          <button id="reset-btn" type="button">重置为默认</button>
+          <button id="open-desktop-binding" type="button">打开桌面版</button>
+        </div>
     </div>
     <div id="preset-dialog">
       <div class="modal-card">
