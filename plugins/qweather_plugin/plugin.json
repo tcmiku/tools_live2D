@@ -1,0 +1,7 @@
+{
+  "id": "qweather_plugin",
+  "name": "Weather Plugin (Free API)",
+  "version": "0.2.0",
+  "description": "Report today's weather on startup and respond to weather queries via Free API.",
+  "entry": "main.py"
+}

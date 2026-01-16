@@ -81,7 +81,7 @@ class AIClient:
             )
         return normalized
 
-    def call(self, user_text: str, focus_seconds_today: int) -> str:
+    def call(self, user_text: str, focus_seconds_today: int, plugin_context: list[str] | None = None) -> str:
         providers = self._load_providers()
         if not providers:
             return "AI 未配置，请先在 AI 设置中填写 API Key。"
@@ -90,6 +90,11 @@ class AIClient:
         extra_hint = self._extra_context(user_text)
         favor_hint = self._favor_hint()
         mood_hint = self._mood_hint()
+        plugin_hint = ""
+        if plugin_context:
+            context_text = "\n".join([text for text in plugin_context if text])
+            if context_text:
+                plugin_hint = f"插件上下文：\n{context_text}\n"
         system_prompt = (
             "你是一只友好的 Live2D 桌面宠物。"
             "语气轻松、鼓励用户专注、回答简洁。"
@@ -98,6 +103,7 @@ class AIClient:
             f"{favor_hint}"
             f"{mood_hint}"
             f"{extra_hint}"
+            f"{plugin_hint}"
         )
 
         with self._lock:

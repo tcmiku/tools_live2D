@@ -77,6 +77,7 @@ let clipboardItems = [];
 let pomodoroState = null;
 let todoItems = [];
 let launcherData = { launchers: [], recent: [] };
+let pluginData = [];
 const interactionState = {
   dragging: false,
   lastX: 0,
@@ -612,7 +613,8 @@ function setupContextMenu() {
   const passiveItem = document.getElementById("context-passive");
   const moreInfoItem = document.getElementById("context-more-info");
   const bindingsItem = document.getElementById("context-bindings");
-  if (!menu || !settingsItem || !chatToggle || !toolsItem || !pomoItem || !reminderItem || !aiItem || !passiveItem || !moreInfoItem || !bindingsItem) return;
+  const pluginsItem = document.getElementById("context-plugins");
+  if (!menu || !settingsItem || !chatToggle || !toolsItem || !pomoItem || !reminderItem || !aiItem || !passiveItem || !moreInfoItem || !bindingsItem || !pluginsItem) return;
 
   document.addEventListener("contextmenu", (event) => {
     event.preventDefault();
@@ -668,6 +670,12 @@ function setupContextMenu() {
     toggleToolPanel("binding-panel");
   });
 
+  pluginsItem.addEventListener("click", (event) => {
+    event.stopPropagation();
+    menu.classList.remove("visible");
+    toggleToolPanel("plugin-panel");
+  });
+
   settingsItem.addEventListener("click", (event) => {
     event.stopPropagation();
     menu.classList.remove("visible");
@@ -711,6 +719,7 @@ function closeAllPanels() {
     "more-info-panel",
     "binding-panel",
     "launcher-panel",
+    "plugin-panel",
   ];
   panelIds.forEach((panelId) => {
     const panel = document.getElementById(panelId);
@@ -782,6 +791,7 @@ function toggleToolPanel(id) {
     "more-info-panel",
     "binding-panel",
     "launcher-panel",
+    "plugin-panel",
   ];
   panels.forEach((panelId) => {
     const panel = document.getElementById(panelId);
@@ -810,6 +820,9 @@ function toggleToolPanel(id) {
   if (id === "launcher-panel") {
     loadLaunchers();
   }
+  if (id === "plugin-panel") {
+    loadPlugins();
+  }
   if (id === "ai-panel") {
     syncAIConfig();
   }
@@ -828,6 +841,7 @@ function setupToolsPanel() {
   const modelSwitchBtn = document.getElementById("tool-model-switch");
   const launcherBtn = document.getElementById("tool-launcher");
   const bindingBtn = document.getElementById("tool-bindings");
+  const pluginBtn = document.getElementById("tool-plugins");
   if (launcherBtn) {
     launcherBtn.innerHTML = '<span class="tool-icon">&#x1F5A5;</span>启动器';
   }
@@ -850,6 +864,9 @@ function setupToolsPanel() {
   }
   if (bindingBtn) {
     bindingBtn.addEventListener("click", () => toggleToolPanel("binding-panel"));
+  }
+  if (pluginBtn) {
+    pluginBtn.addEventListener("click", () => toggleToolPanel("plugin-panel"));
   }
 }
 
@@ -938,7 +955,9 @@ function setupReminderPanel() {
 
   if (todoOpen) {
     todoOpen.addEventListener("click", () => {
-      toggleToolPanel("todo-panel");
+      if (backend && typeof backend.openTodoDialog === "function") {
+        backend.openTodoDialog();
+      }
     });
   }
 }
@@ -2029,6 +2048,12 @@ function initWebChannel() {
         syncLauncherPanel();
       });
     }
+    if (backend.pluginsUpdated) {
+      backend.pluginsUpdated.connect((data) => {
+        pluginData = data?.plugins || [];
+        renderPluginList();
+      });
+    }
 
     if (backend.openPanel) {
       backend.openPanel.connect((name) => {
@@ -2061,6 +2086,7 @@ function initWebChannel() {
     loadNote();
     loadClipboard();
     syncBindingsFromBackend();
+    loadPlugins();
   });
 }
 
@@ -2442,6 +2468,100 @@ function setupLauncherPanel() {
   }
 }
 
+function loadPlugins() {
+  if (!backend || typeof backend.getPlugins !== "function") return;
+  backend.getPlugins((data) => {
+    pluginData = data?.plugins || [];
+    renderPluginList();
+  });
+}
+
+function renderPluginList() {
+  const list = document.getElementById("plugin-list");
+  if (!list) return;
+  list.innerHTML = "";
+  (pluginData || []).forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "plugin-item";
+
+    const head = document.createElement("div");
+    head.className = "plugin-row";
+    const title = document.createElement("div");
+    title.className = "plugin-name";
+    title.textContent = item.name || item.id || "plugin";
+    const toggle = document.createElement("input");
+    toggle.type = "checkbox";
+    toggle.checked = !!item.enabled;
+    toggle.addEventListener("change", () => {
+      if (!backend || typeof backend.setPluginEnabled !== "function") return;
+      backend.setPluginEnabled(String(item.id || ""), !!toggle.checked);
+    });
+    head.appendChild(title);
+    head.appendChild(toggle);
+
+    const meta = document.createElement("div");
+    meta.className = "plugin-meta";
+    const version = item.version ? `v${item.version}` : "v0.0.0";
+    const status = item.loaded ? "loaded" : "idle";
+    meta.textContent = `${item.id || "-"} · ${version} · ${status}`;
+
+    const desc = document.createElement("div");
+    desc.className = "plugin-desc";
+    desc.textContent = item.description || "No description";
+
+    const actions = document.createElement("div");
+    actions.className = "plugin-row";
+    const reloadBtn = document.createElement("button");
+    reloadBtn.type = "button";
+    reloadBtn.textContent = "Reload";
+    reloadBtn.addEventListener("click", () => {
+      if (!backend || typeof backend.reloadPlugin !== "function") return;
+      backend.reloadPlugin(String(item.id || ""));
+    });
+    actions.appendChild(reloadBtn);
+
+    row.appendChild(head);
+    row.appendChild(meta);
+    row.appendChild(desc);
+    if (item.error) {
+      const err = document.createElement("div");
+      err.className = "plugin-error";
+      err.textContent = item.error;
+      row.appendChild(err);
+    }
+    row.appendChild(actions);
+    list.appendChild(row);
+  });
+}
+
+function setupPluginPanel() {
+  const reloadAll = document.getElementById("plugin-reload-all");
+  const openFolder = document.getElementById("plugin-open-folder");
+  const desktopBtn = document.getElementById("plugin-desktop");
+  if (reloadAll) {
+    reloadAll.addEventListener("click", () => {
+      if (backend && typeof backend.reloadPlugins === "function") {
+        backend.reloadPlugins();
+      }
+    });
+  }
+  if (openFolder) {
+    openFolder.addEventListener("click", () => {
+      if (backend && typeof backend.openPluginFolder === "function") {
+        backend.openPluginFolder();
+      }
+    });
+  }
+  if (desktopBtn) {
+    desktopBtn.addEventListener("click", () => {
+      if (backend && typeof backend.openPluginDialog === "function") {
+        backend.openPluginDialog();
+      }
+    });
+  }
+  loadPlugins();
+}
+
 function loadClipboard() {
   if (!backend || typeof backend.getClipboardHistory !== "function") return;
   backend.getClipboardHistory((items) => {
@@ -2533,6 +2653,7 @@ setupSettingsPanel();
   setupClipboardPanel();
   setupToolsPanel();
   setupLauncherPanel();
+  setupPluginPanel();
   setupBindingPanel();
 setupPomodoroPanel();
 setupReminderPanel();

@@ -110,6 +110,7 @@ class AppSettings:
             "login_streak": 0,
             "model_edit_mode": False,
             "bindings_path": "data/model_bindings.json",
+            "plugins_enabled": {},
         }
         stored = self._data.get("settings", {})
         if not isinstance(stored, dict):

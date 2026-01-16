@@ -1,0 +1,7 @@
+{
+  "id": "sample_plugin",
+  "name": "Sample Plugin",
+  "version": "0.1.0",
+  "description": "Logs status changes and greets on startup.",
+  "entry": "main.py"
+}

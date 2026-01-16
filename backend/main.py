@@ -9,8 +9,8 @@ import random
 import ctypes
 from datetime import date
 
-from PySide6.QtCore import QTimer, Qt, QUrl, QPoint, QProcess
-from PySide6.QtGui import QIcon, QGuiApplication
+from PySide6.QtCore import QTimer, Qt, QUrl, QPoint, QProcess, QAbstractTableModel, QModelIndex, QDateTime
+from PySide6.QtGui import QIcon, QGuiApplication, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
     QMenu,
@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QLineEdit,
     QTableWidget,
+    QTableView,
     QHeaderView,
     QPushButton,
     QHBoxLayout,
@@ -32,10 +33,11 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
     QWidget,
-      QTabWidget,
-      QComboBox,
-      QListWidget,
-      QPlainTextEdit,
+    QTabWidget,
+    QComboBox,
+    QListWidget,
+    QPlainTextEdit,
+    QDateTimeEdit,
     QTableWidgetItem,
     QAbstractItemView,
     QGroupBox,
@@ -61,6 +63,7 @@ try:
     from .passive_chat import PassiveChatEngine, PassiveChatConfig
     from .binding_utils import extract_motions_expressions
     from .launchers import LauncherManager
+    from .plugins import PluginManager
 except ImportError:
     from focus import FocusEngine, adjust_state_for_pomodoro
     from stats import FocusStats
@@ -76,6 +79,7 @@ except ImportError:
     from reminders import ReminderEngine, ReminderStore, ReminderConfig
     from login_rewards import apply_daily_login
     from passive_chat import PassiveChatEngine, PassiveChatConfig
+    from plugins import PluginManager
 from binding_utils import extract_motions_expressions, list_model_paths
 from launchers import LauncherManager
 
@@ -936,6 +940,468 @@ class LauncherEditorDialog(QDialog):
         self.items_edit.setEnabled(is_group)
 
 
+class TodoDialog(QDialog):
+    def __init__(self, store: ReminderStore, parent=None) -> None:
+        super().__init__(parent)
+        self._store = store
+
+        self.setWindowTitle("待办事项")
+        self.setMinimumSize(520, 360)
+        self.setStyleSheet(
+            "QDialog { background: #f7f7f5; }"
+            "QLabel { color: #1f1f1f; font-size: 12px; }"
+            "QLineEdit, QDateTimeEdit {"
+            " background: #ffffff; color: #1f1f1f; border: 1px solid #d5d5d5; border-radius: 6px; padding: 4px;"
+            "}"
+            "QTableWidget { background: #ffffff; border: 1px solid #d5d5d5; }"
+            "QHeaderView::section { background: #ededed; padding: 4px; border: none; }"
+            "QPushButton { background: #2f6fed; color: white; border: none; border-radius: 6px; padding: 6px 12px; }"
+            "QPushButton:disabled { background: #b8b8b8; }"
+        )
+
+        layout = QVBoxLayout(self)
+        form = QHBoxLayout()
+        self.title_input = QLineEdit()
+        self.title_input.setPlaceholderText("待办事项")
+        self.due_input = QDateTimeEdit()
+        self.due_input.setCalendarPopup(True)
+        self.due_input.setDisplayFormat("yyyy-MM-dd HH:mm")
+        self.due_input.setDateTime(QDateTime.currentDateTime().addSecs(3600))
+        calendar = self.due_input.calendarWidget()
+        if calendar is not None:
+            calendar.setStyleSheet(
+                "QCalendarWidget QWidget { background: #ffffff; color: #1f1f1f; }"
+                "QCalendarWidget QAbstractItemView {"
+                " background: #ffffff; color: #1f1f1f; selection-background-color: #2f6fed;"
+                " selection-color: #ffffff; }"
+                "QCalendarWidget QToolButton { color: #1f1f1f; }"
+                "QCalendarWidget QMenu { background: #ffffff; color: #1f1f1f; }"
+            )
+        self.add_btn = QPushButton("添加")
+        form.addWidget(self.title_input, 2)
+        form.addWidget(self.due_input, 1)
+        form.addWidget(self.add_btn)
+        layout.addLayout(form)
+
+        self.table = QTableWidget(0, 3)
+        self.table.setHorizontalHeaderLabels(["标题", "时间", "状态"])
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        layout.addWidget(self.table, 1)
+
+        btn_row = QHBoxLayout()
+        self.remove_btn = QPushButton("删除")
+        self.close_btn = QPushButton("关闭")
+        btn_row.addWidget(self.remove_btn)
+        btn_row.addStretch(1)
+        btn_row.addWidget(self.close_btn)
+        layout.addLayout(btn_row)
+
+        self.add_btn.clicked.connect(self._add_item)
+        self.remove_btn.clicked.connect(self._remove_item)
+        self.close_btn.clicked.connect(self.close)
+
+        self.refresh()
+
+    def refresh(self) -> None:
+        self.table.setRowCount(0)
+        todos = self._store.list_todos()
+        for item in todos:
+            row = self.table.rowCount()
+            self.table.insertRow(row)
+            title = QTableWidgetItem(str(item.get("title", "")))
+            title.setData(Qt.UserRole, int(item.get("id", 0)))
+            due_ts = float(item.get("due_ts", 0))
+            due_text = time.strftime("%Y-%m-%d %H:%M", time.localtime(due_ts))
+            due = QTableWidgetItem(due_text)
+            status = QTableWidgetItem("已提醒" if item.get("triggered") else "未提醒")
+            self.table.setItem(row, 0, title)
+            self.table.setItem(row, 1, due)
+            self.table.setItem(row, 2, status)
+
+    def _add_item(self) -> None:
+        title = self.title_input.text().strip()
+        if not title:
+            QMessageBox.warning(self, "提示", "请输入待办事项标题")
+            return
+        due_dt = self.due_input.dateTime().toSecsSinceEpoch()
+        self._store.add_todo(title, due_dt)
+        self.title_input.clear()
+        self.refresh()
+
+    def _remove_item(self) -> None:
+        row = self.table.currentRow()
+        if row < 0:
+            return
+        item = self.table.item(row, 0)
+        if not item:
+            return
+        todo_id = int(item.data(Qt.UserRole) or 0)
+        if todo_id:
+            self._store.remove_todo(todo_id)
+            self.refresh()
+
+
+class PluginTableModel(QAbstractTableModel):
+    def __init__(self, manager: PluginManager) -> None:
+        super().__init__()
+        self._manager = manager
+        self._rows: list[dict] = []
+        self.refresh()
+
+    def refresh(self) -> None:
+        self.beginResetModel()
+        self._rows = self._manager.export_state()
+        self.endResetModel()
+
+    def rowCount(self, parent=QModelIndex()) -> int:
+        if parent.isValid():
+            return 0
+        return len(self._rows)
+
+    def columnCount(self, parent=QModelIndex()) -> int:
+        if parent.isValid():
+            return 0
+        return 6
+
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):
+        if role != Qt.DisplayRole or orientation != Qt.Horizontal:
+            return None
+        headers = ["启用", "名称", "版本", "状态", "路径", "错误"]
+        if 0 <= section < len(headers):
+            return headers[section]
+        return None
+
+    def data(self, index: QModelIndex, role: int = Qt.DisplayRole):
+        if not index.isValid():
+            return None
+        row = index.row()
+        col = index.column()
+        if row < 0 or row >= len(self._rows):
+            return None
+        item = self._rows[row]
+        if col == 0:
+            if role == Qt.CheckStateRole:
+                return Qt.Checked if item.get("enabled") else Qt.Unchecked
+            return None
+        if role != Qt.DisplayRole:
+            return None
+        plugin_id = str(item.get("id", ""))
+        if col == 1:
+            return f"{item.get('name', plugin_id)} ({plugin_id})"
+        if col == 2:
+            return str(item.get("version", ""))
+        if col == 3:
+            return "已加载" if item.get("loaded") else "未加载"
+        if col == 4:
+            return str(item.get("path", ""))
+        if col == 5:
+            return str(item.get("error", ""))
+        return None
+
+    def flags(self, index: QModelIndex):
+        if not index.isValid():
+            return Qt.ItemIsEnabled
+        flags = Qt.ItemIsEnabled | Qt.ItemIsSelectable
+        if index.column() == 0:
+            flags |= Qt.ItemIsUserCheckable
+        return flags
+
+    def setData(self, index: QModelIndex, value, role: int = Qt.EditRole) -> bool:
+        if not index.isValid() or index.column() != 0:
+            return False
+        if role != Qt.CheckStateRole:
+            return False
+        row = index.row()
+        if row < 0 or row >= len(self._rows):
+            return False
+        plugin_id = str(self._rows[row].get("id", ""))
+        enabled = value == Qt.Checked
+        if plugin_id:
+            self._manager.set_enabled(plugin_id, enabled)
+            self.refresh()
+            return True
+        return False
+
+    def get_item(self, row: int) -> dict:
+        if 0 <= row < len(self._rows):
+            return self._rows[row]
+        return {}
+
+
+class PluginManagerDialog(QDialog):
+    def __init__(self, manager: PluginManager, parent=None) -> None:
+        super().__init__(parent)
+        self._manager = manager
+
+        self.setWindowTitle("插件管理")
+        self.setMinimumSize(720, 520)
+        self.setStyleSheet(
+            "QDialog { background: #f7f7f5; }"
+            "QLabel { color: #1f1f1f; font-size: 12px; }"
+            "QLineEdit, QPlainTextEdit {"
+            " background: #ffffff; color: #1f1f1f; border: 1px solid #d5d5d5; border-radius: 6px; padding: 4px;"
+            "}"
+            "QTableWidget { background: #ffffff; border: 1px solid #d5d5d5; }"
+            "QHeaderView::section { background: #ededed; padding: 4px; border: none; }"
+            "QPushButton { background: #2f6fed; color: white; border: none; border-radius: 6px; padding: 6px 12px; }"
+            "QPushButton:disabled { background: #b8b8b8; }"
+        )
+
+        layout = QVBoxLayout(self)
+
+        actions = QHBoxLayout()
+        self.refresh_btn = QPushButton("刷新")
+        self.reload_all_btn = QPushButton("重新加载全部")
+        self.reload_selected_btn = QPushButton("重新加载选中")
+        self.open_panel_btn = QPushButton("打开面板")
+        self.install_btn = QPushButton("安装目录")
+        self.import_btn = QPushButton("导入压缩包")
+        self.export_btn = QPushButton("导出选中")
+        self.uninstall_btn = QPushButton("卸载选中")
+        self.open_folder_btn = QPushButton("打开插件目录")
+        actions.addWidget(self.refresh_btn)
+        actions.addWidget(self.reload_all_btn)
+        actions.addWidget(self.reload_selected_btn)
+        actions.addWidget(self.open_panel_btn)
+        actions.addWidget(self.install_btn)
+        actions.addWidget(self.import_btn)
+        actions.addWidget(self.export_btn)
+        actions.addWidget(self.uninstall_btn)
+        actions.addWidget(self.open_folder_btn)
+        actions.addStretch(1)
+        layout.addLayout(actions)
+
+        self.table = QTableView()
+        self.model = PluginTableModel(self._manager)
+        self.table.setModel(self.model)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        layout.addWidget(self.table, 1)
+
+        test_group = QGroupBox("测试钩子")
+        test_layout = QVBoxLayout(test_group)
+        input_row = QHBoxLayout()
+        input_row.addWidget(QLabel("消息"))
+        self.message_input = QLineEdit()
+        self.message_input.setPlaceholderText("输入测试消息")
+        input_row.addWidget(self.message_input, 1)
+        test_layout.addLayout(input_row)
+
+        btn_row = QHBoxLayout()
+        self.test_start_btn = QPushButton("on_app_start")
+        self.test_ready_btn = QPushButton("on_app_ready")
+        self.test_state_btn = QPushButton("on_state")
+        self.test_tick_btn = QPushButton("on_tick")
+        self.test_user_btn = QPushButton("on_user_message")
+        self.test_ai_btn = QPushButton("on_ai_reply")
+        self.test_passive_btn = QPushButton("on_passive_message")
+        self.test_ai_context_btn = QPushButton("on_ai_context")
+        btn_row.addWidget(self.test_start_btn)
+        btn_row.addWidget(self.test_ready_btn)
+        btn_row.addWidget(self.test_state_btn)
+        btn_row.addWidget(self.test_tick_btn)
+        btn_row.addWidget(self.test_user_btn)
+        btn_row.addWidget(self.test_ai_btn)
+        btn_row.addWidget(self.test_passive_btn)
+        btn_row.addWidget(self.test_ai_context_btn)
+        btn_row.addStretch(1)
+        test_layout.addLayout(btn_row)
+        layout.addWidget(test_group)
+
+        self.log_tabs = QTabWidget()
+        self.plugin_log = QPlainTextEdit()
+        self.plugin_log.setReadOnly(True)
+        self.plugin_log.setPlaceholderText("插件日志")
+        self.action_log = QPlainTextEdit()
+        self.action_log.setReadOnly(True)
+        self.action_log.setPlaceholderText("操作日志")
+        self.log_tabs.addTab(self.plugin_log, "插件日志")
+        self.log_tabs.addTab(self.action_log, "操作日志")
+        log_actions = QHBoxLayout()
+        self.clear_log_btn = QPushButton("清空插件日志")
+        log_actions.addWidget(self.clear_log_btn)
+        log_actions.addStretch(1)
+        layout.addWidget(self.log_tabs, 1)
+        layout.addLayout(log_actions)
+
+        self.refresh_btn.clicked.connect(self.refresh)
+        self.reload_all_btn.clicked.connect(self._reload_all)
+        self.reload_selected_btn.clicked.connect(self._reload_selected)
+        self.open_panel_btn.clicked.connect(self._open_panel_selected)
+        self.install_btn.clicked.connect(self._install_from_dir)
+        self.import_btn.clicked.connect(self._import_zip)
+        self.export_btn.clicked.connect(self._export_selected)
+        self.uninstall_btn.clicked.connect(self._uninstall_selected)
+        self.open_folder_btn.clicked.connect(self._open_folder)
+        self.test_start_btn.clicked.connect(self._test_app_start)
+        self.test_ready_btn.clicked.connect(self._test_app_ready)
+        self.test_state_btn.clicked.connect(self._test_state)
+        self.test_tick_btn.clicked.connect(self._test_tick)
+        self.test_user_btn.clicked.connect(self._test_user_message)
+        self.test_ai_btn.clicked.connect(self._test_ai_reply)
+        self.test_passive_btn.clicked.connect(self._test_passive_message)
+        self.test_ai_context_btn.clicked.connect(self._test_ai_context)
+        self.clear_log_btn.clicked.connect(self._clear_plugin_log)
+        self.table.selectionModel().selectionChanged.connect(self._refresh_plugin_log)
+
+        self.refresh()
+
+    def refresh(self) -> None:
+        self.model.refresh()
+        self._refresh_plugin_log()
+
+    def _selected_plugin_id(self) -> str:
+        index = self.table.currentIndex()
+        if not index.isValid():
+            return ""
+        item = self.model.get_item(index.row())
+        return str(item.get("id", "")) if item else ""
+
+    def _reload_all(self) -> None:
+        self._manager.reload_plugins()
+        self._log_action("重新加载全部插件")
+        self.refresh()
+
+    def _reload_selected(self) -> None:
+        plugin_id = self._selected_plugin_id()
+        if not plugin_id:
+            return
+        self._manager.reload_plugin(plugin_id)
+        self._log_action(f"重新加载插件: {plugin_id}")
+        self.refresh()
+
+    def _open_panel_selected(self) -> None:
+        plugin_id = self._selected_plugin_id()
+        if not plugin_id:
+            return
+        panel = self._manager.open_plugin_panel(plugin_id, parent=self)
+        if panel and hasattr(panel, "show"):
+            panel.show()
+            if hasattr(panel, "raise_"):
+                panel.raise_()
+            if hasattr(panel, "activateWindow"):
+                panel.activateWindow()
+            self._log_action(f"打开插件面板: {plugin_id}")
+        else:
+            QMessageBox.information(self, "插件面板", "该插件未提供管理面板。")
+            self._log_action(f"插件无面板: {plugin_id}")
+
+    def _open_folder(self) -> None:
+        if QDesktopServices.openUrl(QUrl.fromLocalFile(self._manager.plugin_root)):
+            self._log_action("打开插件目录")
+        else:
+            self._log_action("无法打开插件目录")
+
+    def _install_from_dir(self) -> None:
+        path = QFileDialog.getExistingDirectory(self, "选择插件目录", self._manager.plugin_root)
+        if not path:
+            return
+        ok, message = self._manager.install_from_dir(path)
+        QMessageBox.information(self, "安装插件", message)
+        self._log_action(message)
+        self.refresh()
+
+    def _import_zip(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "导入插件压缩包", "", "ZIP 文件 (*.zip)")
+        if not path:
+            return
+        ok, message = self._manager.import_from_zip(path)
+        QMessageBox.information(self, "导入插件", message)
+        self._log_action(message)
+        self.refresh()
+
+    def _export_selected(self) -> None:
+        plugin_id = self._selected_plugin_id()
+        if not plugin_id:
+            return
+        default_name = f"{plugin_id}.zip"
+        path, _ = QFileDialog.getSaveFileName(self, "导出插件", default_name, "ZIP 文件 (*.zip)")
+        if not path:
+            return
+        ok, message = self._manager.export_to_zip(plugin_id, path)
+        QMessageBox.information(self, "导出插件", message)
+        self._log_action(message)
+
+    def _uninstall_selected(self) -> None:
+        plugin_id = self._selected_plugin_id()
+        if not plugin_id:
+            return
+        result = QMessageBox.question(self, "卸载插件", f"确认卸载插件 {plugin_id}？")
+        if result != QMessageBox.Yes:
+            return
+        ok, message = self._manager.uninstall_plugin(plugin_id)
+        QMessageBox.information(self, "卸载插件", message)
+        self._log_action(message)
+        self.refresh()
+
+    def _test_app_start(self) -> None:
+        self._manager.on_app_start()
+        self._log_action("触发 on_app_start")
+
+    def _test_app_ready(self) -> None:
+        self._manager.on_app_ready()
+        self._log_action("触发 on_app_ready")
+
+    def _test_state(self) -> None:
+        payload = {"status": "active", "idle_ms": 1200, "focus_seconds_today": 42, "input_type": "keyboard", "window_title": "Test"}
+        self._manager.on_state(payload)
+        self._log_action("触发 on_state")
+
+    def _test_tick(self) -> None:
+        payload = {"status": "active", "idle_ms": 800, "focus_seconds_today": 42, "input_type": "mouse", "window_title": "Test"}
+        self._manager.on_tick(payload, time.time())
+        self._log_action("触发 on_tick")
+
+    def _test_user_message(self) -> None:
+        text = self._message_text()
+        self._manager.on_user_message(text)
+        self._log_action(f"触发 on_user_message: {text}")
+
+    def _test_ai_reply(self) -> None:
+        text = self._message_text()
+        self._manager.on_ai_reply(text)
+        self._log_action(f"触发 on_ai_reply: {text}")
+
+    def _test_passive_message(self) -> None:
+        text = self._message_text()
+        self._manager.on_passive_message(text)
+        self._log_action(f"触发 on_passive_message: {text}")
+
+    def _test_ai_context(self) -> None:
+        text = self._message_text()
+        context = self._manager.collect_ai_context(text)
+        if context:
+            joined = " | ".join(context)
+            self._log_action(f"触发 on_ai_context: {joined}")
+        else:
+            self._log_action("触发 on_ai_context: 无返回")
+
+    def _clear_plugin_log(self) -> None:
+        plugin_id = self._selected_plugin_id()
+        if not plugin_id:
+            return
+        self._manager.clear_logs(plugin_id)
+        self._log_action(f"清空插件日志: {plugin_id}")
+        self._refresh_plugin_log()
+
+    def _message_text(self) -> str:
+        text = self.message_input.text().strip()
+        return text or "测试消息"
+
+    def _log_action(self, text: str) -> None:
+        self.action_log.appendPlainText(text)
+
+    def _refresh_plugin_log(self, *_args) -> None:
+        plugin_id = self._selected_plugin_id()
+        lines = self._manager.get_logs(plugin_id) if plugin_id else []
+        self.plugin_log.setPlainText("\n".join(lines))
+
 def main() -> None:
     os.makedirs(LOG_DIR, exist_ok=True)
     logging.basicConfig(
@@ -950,6 +1416,23 @@ def main() -> None:
 
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+    app.setStyleSheet(
+        "QDialog { background: #f7f7f5; }"
+        "QMessageBox { background: #f7f7f5; }"
+        "QLabel { color: #1f1f1f; font-size: 12px; }"
+        "QLineEdit, QPlainTextEdit, QComboBox, QDateTimeEdit {"
+        " background: #ffffff; color: #1f1f1f; border: 1px solid #d5d5d5; border-radius: 6px; padding: 4px;"
+        "}"
+        "QTableWidget, QListWidget { background: #ffffff; border: 1px solid #d5d5d5; }"
+        "QHeaderView::section { background: #ededed; padding: 4px; border: none; }"
+        "QPushButton { background: #2f6fed; color: #ffffff; border: none; border-radius: 6px; padding: 6px 12px; }"
+        "QPushButton:disabled { background: #b8b8b8; }"
+        "QCalendarWidget QWidget { background: #ffffff; color: #1f1f1f; }"
+        "QCalendarWidget QAbstractItemView {"
+        " background: #ffffff; color: #1f1f1f; selection-background-color: #2f6fed; selection-color: #ffffff; }"
+        "QCalendarWidget QToolButton { color: #1f1f1f; }"
+        "QCalendarWidget QMenu { background: #ffffff; color: #1f1f1f; }"
+    )
 
     stats = FocusStats()
     engine = FocusEngine(stats=stats)
@@ -983,6 +1466,12 @@ def main() -> None:
         binding_manager=binding_manager,
         launcher_manager=launcher_manager,
     )
+    plugin_manager = PluginManager(BASE_DIR, settings, bridge)
+    bridge.set_plugin_manager(plugin_manager)
+    plugin_manager.load_plugins()
+    plugin_manager.on_app_start()
+    plugin_manager.on_settings_updated(settings.get_settings())
+    bridge.pluginsUpdated.emit({"plugins": plugin_manager.export_state()})
 
     tray_icon_path = os.path.join(ASSETS_DIR, "tray_icon.png")
     if os.path.exists(tray_icon_path):
@@ -1067,6 +1556,8 @@ def main() -> None:
 
     binding_dialog = None
     launcher_dialog = None
+    todo_dialog = None
+    plugin_dialog = None
 
     def open_binding_dialog() -> None:
         nonlocal binding_dialog
@@ -1089,6 +1580,24 @@ def main() -> None:
         launcher_dialog.show()
         launcher_dialog.raise_()
         launcher_dialog.activateWindow()
+
+    def open_todo_dialog() -> None:
+        nonlocal todo_dialog
+        if todo_dialog is None:
+            todo_dialog = TodoDialog(reminder_store, parent=window)
+        todo_dialog.refresh()
+        todo_dialog.show()
+        todo_dialog.raise_()
+        todo_dialog.activateWindow()
+
+    def open_plugin_dialog() -> None:
+        nonlocal plugin_dialog
+        if plugin_dialog is None:
+            plugin_dialog = PluginManagerDialog(plugin_manager, parent=window)
+        plugin_dialog.refresh()
+        plugin_dialog.show()
+        plugin_dialog.raise_()
+        plugin_dialog.activateWindow()
 
     position_menu = QMenu("窗口位置")
 
@@ -1166,7 +1675,14 @@ def main() -> None:
     bridge.set_open_ai_dialog(open_ai_detail)
     bridge.set_open_binding_dialog(open_binding_dialog)
     bridge.set_open_launcher_dialog(open_launcher_dialog)
+    bridge.set_open_todo_dialog(open_todo_dialog)
+    bridge.set_open_plugin_dialog(open_plugin_dialog)
+    bridge.settingsUpdated.connect(plugin_manager.on_settings_updated)
+    bridge.aiReply.connect(plugin_manager.on_ai_reply)
+    bridge.passiveMessage.connect(plugin_manager.on_passive_message)
+    bridge.userMessage.connect(plugin_manager.on_user_message)
     logging.info("window shown")
+    plugin_manager.on_app_ready()
     hint_window = HotkeyHintWindow(window)
     hint_window.set_text(build_hotkey_hint(settings.get_settings()))
     hint_window.hide()
@@ -1297,6 +1813,7 @@ def main() -> None:
     bridge.settingsUpdated.connect(register_hotkeys)
     bridge.launchersUpdated.connect(lambda _data: register_hotkeys(settings.get_settings()))
     app.aboutToQuit.connect(hotkey_manager.unregister_all)
+    app.aboutToQuit.connect(plugin_manager.shutdown)
 
     def apply_passive_config_for_mood(mood_value: int) -> None:
         interval = max(5, int(passive_base_config.interval_min * mood_interval_factor(mood_value)))
@@ -1443,7 +1960,16 @@ def main() -> None:
         state = adjust_state_for_pomodoro(state, pomodoro.mode)
         if state.input_type in ("keyboard", "mouse"):
             record_interaction()
-        update_mood(state, time.time())
+        now = time.time()
+        update_mood(state, now)
+        plugin_state = {
+            "status": state.status,
+            "idle_ms": state.idle_ms,
+            "focus_seconds_today": state.focus_seconds_today,
+            "input_type": state.input_type,
+            "window_title": state.window_title,
+        }
+        plugin_manager.on_state(plugin_state)
         bridge.push_state(
             state,
             {
@@ -1476,7 +2002,7 @@ def main() -> None:
         tooltip = f"状态：{status_map.get(status_label, status_label)}\n今日专注：{stats.format_today_focus()}"
         tray.setToolTip(tooltip)
 
-        now = time.time()
+        plugin_manager.on_tick(plugin_state, now)
         if stats.get_today_focus_seconds() >= 2 * 60 * 60:
             push_summary("focus_2h")
         reminder_events = reminders.update_focus(state, now)

@@ -5,7 +5,7 @@ import threading
 import os
 import time
 import zipfile
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 from PySide6.QtCore import QObject, Signal, Slot, QPoint
 
@@ -55,6 +55,7 @@ class BackendBridge(QObject):
     bindingsUpdated = Signal(dict)
     bindingPreview = Signal(str, str)
     launchersUpdated = Signal(dict)
+    pluginsUpdated = Signal(dict)
 
     def __init__(
         self,
@@ -81,8 +82,11 @@ class BackendBridge(QObject):
         self._open_ai_dialog = None
         self._open_binding_dialog = None
         self._open_launcher_dialog = None
+        self._open_todo_dialog = None
+        self._open_plugin_dialog = None
         self._binding_manager = binding_manager
         self._launcher_manager = launcher_manager
+        self._plugin_manager = None
         self._last_state: Dict[str, object] = {
             "status": "idle",
             "idle_ms": 0,
@@ -117,7 +121,14 @@ class BackendBridge(QObject):
 
         def _worker() -> None:
             try:
-                reply = self._ai_client.call(message, int(self._last_state.get("focus_seconds_today", 0)))
+                plugin_context = []
+                if self._plugin_manager and hasattr(self._plugin_manager, "collect_ai_context"):
+                    plugin_context = self._plugin_manager.collect_ai_context(message)
+                reply = self._ai_client.call(
+                    message,
+                    int(self._last_state.get("focus_seconds_today", 0)),
+                    plugin_context=plugin_context,
+                )
                 self.aiReply.emit(reply)
             except Exception as exc:
                 logging.exception("ai worker failed: %s", exc)
@@ -136,6 +147,21 @@ class BackendBridge(QObject):
 
     def set_open_launcher_dialog(self, handler) -> None:
         self._open_launcher_dialog = handler
+
+    def set_open_todo_dialog(self, handler) -> None:
+        self._open_todo_dialog = handler
+
+    def set_open_plugin_dialog(self, handler) -> None:
+        self._open_plugin_dialog = handler
+
+    def set_plugin_manager(self, manager: Any) -> None:
+        self._plugin_manager = manager
+
+    def _emit_plugins(self) -> None:
+        if not self._plugin_manager:
+            self.pluginsUpdated.emit({"plugins": []})
+            return
+        self.pluginsUpdated.emit({"plugins": self._plugin_manager.export_state()})
 
     @Slot(bool)
     def setWindowDragEnabled(self, enabled: bool) -> None:
@@ -416,6 +442,46 @@ class BackendBridge(QObject):
         self.settingsUpdated.emit(current)
         logging.info("ai settings updated: provider=%s model=%s", current.get("ai_provider"), current.get("ai_model"))
 
+    @Slot(result=dict)
+    def getPlugins(self) -> dict:
+        if not self._plugin_manager:
+            return {"plugins": []}
+        return {"plugins": self._plugin_manager.export_state()}
+
+    @Slot(str, bool)
+    def setPluginEnabled(self, plugin_id: str, enabled: bool) -> None:
+        if not self._plugin_manager:
+            return
+        self._plugin_manager.set_enabled(plugin_id, bool(enabled))
+        self._emit_plugins()
+
+    @Slot()
+    def reloadPlugins(self) -> None:
+        if not self._plugin_manager:
+            return
+        self._plugin_manager.reload_plugins()
+        self._emit_plugins()
+
+    @Slot(str)
+    def reloadPlugin(self, plugin_id: str) -> None:
+        if not self._plugin_manager:
+            return
+        self._plugin_manager.reload_plugin(plugin_id)
+        self._emit_plugins()
+
+    @Slot()
+    def openPluginFolder(self) -> None:
+        if not self._plugin_manager:
+            return
+        path = self._plugin_manager.plugin_root
+        try:
+            from PySide6.QtCore import QUrl
+            from PySide6.QtGui import QDesktopServices
+
+            QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+        except Exception as exc:
+            logging.exception("open plugin folder failed: %s", exc)
+
     @Slot()
     def openAIDetailDialog(self) -> None:
         if self._open_ai_dialog:
@@ -430,6 +496,16 @@ class BackendBridge(QObject):
     def openLauncherDialog(self) -> None:
         if self._open_launcher_dialog:
             self._open_launcher_dialog()
+
+    @Slot()
+    def openTodoDialog(self) -> None:
+        if self._open_todo_dialog:
+            self._open_todo_dialog()
+
+    @Slot()
+    def openPluginDialog(self) -> None:
+        if self._open_plugin_dialog:
+            self._open_plugin_dialog()
 
     @Slot()
     def togglePetWindow(self) -> None:

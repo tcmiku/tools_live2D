@@ -244,8 +244,10 @@
         opacity: 0.45;
         cursor: not-allowed;
       }
-      #binding-panel {
-        width: 340px;
+      #binding-panel,
+      #plugin-panel {
+        width: min(480px, calc(100vw - 24px));
+        max-width: 480px;
       }
       #binding-panel .panel-header {
         display: flex;
@@ -389,6 +391,63 @@
         justify-content: flex-end;
       }
 .launcher-item button {
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(0, 0, 0, 0.2);
+        color: #fff;
+        border-radius: 6px;
+        font-size: 10px;
+        padding: 2px 6px;
+        cursor: pointer;
+      }
+      .plugin-actions {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      .plugin-actions button {
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(0, 0, 0, 0.2);
+        color: #fff;
+        border-radius: 6px;
+        font-size: 11px;
+        padding: 4px 8px;
+        cursor: pointer;
+      }
+      .plugin-list {
+        display: grid;
+        gap: 8px;
+      }
+      .plugin-item {
+        display: grid;
+        gap: 6px;
+        padding: 8px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .plugin-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .plugin-name {
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .plugin-meta {
+        font-size: 11px;
+        opacity: 0.75;
+      }
+      .plugin-desc {
+        font-size: 11px;
+        opacity: 0.8;
+      }
+      .plugin-error {
+        font-size: 11px;
+        color: #ffb4b4;
+      }
+      .plugin-row button {
         border: 1px solid rgba(255, 255, 255, 0.2);
         background: rgba(0, 0, 0, 0.2);
         color: #fff;
@@ -828,7 +887,7 @@
     <body>
       <canvas id="canvas"></canvas>
       <div id="speech-bubble"></div>
-    <div id="quick-toolbar">
+    <div id="quick-toolbar" class="collapsed">
         <button id="quick-toggle" class="quick-btn" data-tooltip="显示/隐藏">&#x1F3AF;</button>
         <button id="quick-note" class="quick-btn" data-tooltip="便签">&#x1F4DD;</button>
         <button id="quick-pomodoro" class="quick-btn" data-tooltip="番茄钟">&#x23F0;</button>
@@ -899,6 +958,7 @@
       <button id="context-more-info" type="button">更多信息</button>
       <button id="context-settings" type="button">设置</button>
       <button id="context-bindings" type="button">动作绑定</button>
+      <button id="context-plugins" type="button">插件</button>
       <button id="context-chat-toggle" type="button">隐藏聊天框</button>
     </div>
     <div id="tools-panel" class="tool-panel">
@@ -913,6 +973,7 @@
         <button id="tool-model-switch" type="button"><span class="tool-icon">&#x21bb;</span>切换模型</button>
         <button id="tool-launcher" type="button"><span class="tool-icon">&#x1F5A5;</span>启动器</button>
         <button id="tool-bindings" type="button">动作绑定</button>
+        <button id="tool-plugins" type="button">插件管理</button>
       </div>
     </div>
     <div id="launcher-panel" class="tool-panel">
@@ -937,6 +998,18 @@
         <div class="launcher-section-title">全部</div>
         <div id="launcher-list" class="launcher-list"></div>
       </div>
+    </div>
+    <div id="plugin-panel" class="tool-panel">
+      <div class="panel-title">
+        插件管理
+        <button class="panel-close" data-close="plugin-panel" type="button">×</button>
+      </div>
+      <div class="plugin-actions">
+        <button id="plugin-reload-all" type="button">重新加载全部</button>
+        <button id="plugin-open-folder" type="button">打开插件目录</button>
+        <button id="plugin-desktop" type="button">在窗口中打开</button>
+      </div>
+      <div id="plugin-list" class="plugin-list"></div>
     </div>
     <div id="note-panel" class="tool-panel">
       <div class="panel-title">
@@ -1007,20 +1080,8 @@
         <input id="eye-interval" type="number" min="10" max="240" />
       </div>
       <div class="tools-grid">
-        <button id="open-todo-panel" type="button">打开待办事项</button>
+        <button id="open-todo-panel" type="button">打开待办事项面板</button>
       </div>
-    </div>
-    <div id="todo-panel" class="tool-panel">
-      <div class="panel-title">
-        待办事项
-        <button class="panel-close" data-close="todo-panel" type="button">×</button>
-      </div>
-      <div class="todo-row">
-        <input id="todo-title" type="text" placeholder="待办事项" />
-        <input id="todo-time" type="datetime-local" />
-        <button id="todo-add" type="button">添加</button>
-      </div>
-      <div id="todo-list"></div>
     </div>
     <div id="ai-panel" class="tool-panel">
       <div class="panel-title">
