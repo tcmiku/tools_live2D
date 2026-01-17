@@ -24,7 +24,7 @@
 - ✅ **番茄钟进度条** - 实时显示专注/休息进度，完成获得好感度奖励
 - ✅ **AI 对话历史** - 自动保存最近6轮对话上下文，提供更连贯的对话体验
 - ✅ **交互式反馈** - 打字时随机鼓励，空闲时提醒休息，切换窗口时建议专注
-- ✅ **键盘快捷键** - 全局热键快速操作（Ctrl+Shift+L: 显示/隐藏, Ctrl+Shift+P: 便签, Ctrl+Shift+T: 番茄钟）
+- ✅ **键盘快捷键** - 全局热键快速操作（Ctrl+Shift+L: 显示/隐藏, Ctrl+Shift+P: 便签, Ctrl+Shift+T: 番茄钟, Ctrl+H: 聊天框）
 - ✅ **心情/状态系统** - 基于互动/专注/好感度/空闲计算心情，影响对话语气与被动频率
 - ✅ **每日/每周总结推送** - 17:00 或达成条件触发专注/番茄钟汇总
 - ✅ **热键可视化提示** - 按住 Ctrl+Shift 显示快捷键浮窗提示
@@ -65,7 +65,7 @@
 - **便签/备忘录** - 快速记录，自动保存，300ms 防抖
 - **剪贴板历史** - 自动记录复制历史（最多30条），支持搜索和恢复
 - **系统监控** - CPU、内存、网络、电池实时监控（1秒刷新）
-- **全局热键** - Ctrl+Shift+L/P/T 快速操作
+- **全局热键** - Ctrl+Shift+L/P/T + Ctrl+H 快速操作
 - **快速启动器** - 一键打开常用网页/应用/工作流
 
 ### 🎨 个性化设置
@@ -236,7 +236,7 @@ tools_live2D/
 - **plugin.json 字段**：`id/name/version/description/entry`
 - **插件类**：`Plugin` 类或 `create_plugin(context)` 函数返回 `PLUGIN` 实例
 - **UI 集成**：可选实现 `get_panel(parent)` 或 `open_panel(parent)` 返回 PySide6 组件/窗口
-- **生命周期钩子**：`on_app_start/on_app_ready/on_settings/on_state/on_tick/on_ai_reply/on_user_message/on_passive_message`
+- **生命周期钩子**：`on_app_start/on_app_ready/on_settings/on_state/on_tick/on_ai_reply/on_user_message/on_passive_message/should_block_passive`
 - **AI 上下文**：`get_ai_context(user_text)` 或 `on_ai_context(user_text)` 为 AI 对话提供额外上下文
 - **插件上下文**：`context.get_data_path()` 获取插件数据目录，`context.log()` 记录日志
 
@@ -418,7 +418,8 @@ const modelUrl = new URL("./model/your_model/your_model.model3.json", window.loc
     "hotkey_toggle_pet": "Ctrl+Shift+L",
     "hotkey_note": "Ctrl+Shift+P",
     "hotkey_pomodoro": "Ctrl+Shift+T",
-    "hotkey_launcher_panel": "Ctrl+Shift+Space"
+    "hotkey_launcher_panel": "Ctrl+Shift+Space",
+    "hotkey_chat_toggle": "Ctrl+H"
   }
 }
 ```
@@ -682,6 +683,10 @@ class Plugin:
     def on_passive_message(self, text):
         """被动消息时调用"""
         pass
+
+    def should_block_passive(self, reason):
+        """阻断被动提示（返回 True 则阻断）"""
+        return False
 ```
 
 #### 4. 插件上下文
@@ -698,6 +703,9 @@ def on_load(self, context):
 
     # 访问桥接器
     context.bridge.push_passive_message("插件已加载！")
+
+    # 短时间阻断被动提示，避免插件气泡被打断
+    context.block_passive(2.0)
 ```
 
 #### 5. 插件管理
@@ -900,7 +908,7 @@ def getNewData(self) -> dict:
 **新增功能：**
 - ✅ **插件系统** - 支持扩展插件的加载、启用/禁用、重载、安装/卸载
 - ✅ **插件管理面板** - 前端插件管理界面，支持查看插件状态、测试钩子
-- ✅ **插件钩子** - 支持 on_app_start、on_app_ready、on_settings、on_state、on_tick、on_user_message、on_ai_reply、on_passive_message 等钩子
+- ✅ **插件钩子** - 支持 on_app_start、on_app_ready、on_settings、on_state、on_tick、on_user_message、on_ai_reply、on_passive_message、should_block_passive 等钩子
 - ✅ **插件安装/卸载** - 支持从目录安装、ZIP导入、导出、卸载插件
 - ✅ **插件数据隔离** - 每个插件有独立的数据目录
 
@@ -936,7 +944,7 @@ def getNewData(self) -> dict:
 - ✅ **番茄钟进度条** - 实时可视化进度显示
 - ✅ **AI 对话历史** - 6轮上下文记忆，更连贯对话
 - ✅ **交互式反馈** - 打字鼓励、空闲提醒、窗口切换建议
-- ✅ **全局热键** - Ctrl+Shift+L/P/T 快速操作
+- ✅ **全局热键** - Ctrl+Shift+L/P/T + Ctrl+H 快速操作
 - ✅ **好感度系统** - 互动影响语气（80+亲近，25-礼貌）
 - ✅ **更多状态面板** - 详细系统信息展示
 - ✅ **心情/状态系统** - 心情计算与对话语气/被动频率联动

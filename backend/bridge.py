@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import json
 import logging
 import threading
 import os
@@ -105,8 +106,12 @@ class BackendBridge(QObject):
         self.stateUpdated.emit(payload)
 
     def push_passive_message(self, text: str) -> None:
-        if text:
-            self.passiveMessage.emit(text)
+        if not text:
+            return
+        if self._plugin_manager and hasattr(self._plugin_manager, "should_block_passive"):
+            if self._plugin_manager.should_block_passive("passive_message"):
+                return
+        self.passiveMessage.emit(text)
 
     @Slot(result=dict)
     def getInitialState(self) -> dict:
@@ -268,9 +273,21 @@ class BackendBridge(QObject):
             return results
         for root, _dirs, files in os.walk(model_root):
             for filename in files:
-                if not (filename.endswith(".model3.json") or filename.endswith(".model.json")):
+                if not filename.endswith(".model3.json"):
                     continue
                 full_path = os.path.join(root, filename)
+                try:
+                    with open(full_path, "r", encoding="utf-8") as handle:
+                        payload = json.load(handle)
+                    refs = payload.get("FileReferences") if isinstance(payload, dict) else None
+                    moc = refs.get("Moc") if isinstance(refs, dict) else None
+                    textures = refs.get("Textures") if isinstance(refs, dict) else None
+                    if not moc or not isinstance(textures, list) or not textures:
+                        logging.warning("skip invalid model settings: %s", full_path)
+                        continue
+                except Exception as exc:
+                    logging.warning("skip invalid model settings: %s (%s)", full_path, exc)
+                    continue
                 rel_path = os.path.relpath(full_path, web_dir).replace(os.sep, "/")
                 name = os.path.basename(root)
                 results.append({"name": name, "path": rel_path})

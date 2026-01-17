@@ -21,7 +21,10 @@ class ModelListTests(unittest.TestCase):
             self.assertIn("model/test_model_list/test.model3.json", paths)
         finally:
             if model_file.exists():
-                model_file.unlink()
+                try:
+                    model_file.unlink()
+                except PermissionError:
+                    pass
             try:
                 model_dir.rmdir()
             except OSError:

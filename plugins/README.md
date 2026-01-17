@@ -46,6 +46,7 @@ plugins/
 - `on_user_message(text)`
 - `on_ai_reply(text)`
 - `on_passive_message(text)`
+- `should_block_passive(reason)` 或 `on_should_block_passive(reason)`
 - `get_panel(parent)` 或 `open_panel(parent)`
 
 钩子说明：
@@ -60,6 +61,7 @@ plugins/
 - `on_user_message(text)`: 用户发送消息时触发。
 - `on_ai_reply(text)`: AI 回复产生时触发。
 - `on_passive_message(text)`: 被动对话消息产生时触发。
+- `should_block_passive(reason)`/`on_should_block_passive(reason)`: 返回 True 可阻断被动提示，例如插件需要使用气泡时。
 - `get_panel(parent)`/`open_panel(parent)`: 返回或打开插件管理面板（PySide6 组件）。
 
 `context` 字段：
@@ -70,6 +72,7 @@ plugins/
 - `context.data_dir`
 - `context.settings`（AppSettings 实例）
 - `context.bridge`（BackendBridge 实例）
+- `context.block_passive(seconds)`：短时间阻断被动提示，避免插件气泡被打断。
 
 数据文件：
 

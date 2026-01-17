@@ -39,6 +39,7 @@ class PluginContext:
         bridge: Any,
         log_handler=None,
         ai_context_handler=None,
+        passive_block_handler=None,
     ) -> None:
         self.plugin_id = plugin_id
         self.plugin_dir = plugin_dir
@@ -48,6 +49,7 @@ class PluginContext:
         self.bridge = bridge
         self._log_handler = log_handler
         self._ai_context_handler = ai_context_handler
+        self._passive_block_handler = passive_block_handler
 
     def get_data_path(self, *parts: str) -> str:
         path = os.path.join(self.data_dir, "plugins", self.plugin_id, *parts)
@@ -74,6 +76,10 @@ class PluginContext:
             return
         if self._ai_context_handler:
             self._ai_context_handler(self.plugin_id, message)
+
+    def block_passive(self, seconds: float = 2.0) -> None:
+        if self._passive_block_handler:
+            self._passive_block_handler(seconds)
 
 
 class PluginRecord:
@@ -199,6 +205,37 @@ class PluginManager:
         self._logs: dict[str, list[str]] = {}
         self._ai_context: list[str] = []
         self._ai_lock = threading.Lock()
+        self._passive_block_until = 0.0
+
+    def block_passive(self, seconds: float = 2.0) -> None:
+        try:
+            duration = float(seconds)
+        except (TypeError, ValueError):
+            duration = 0.0
+        if duration <= 0:
+            return
+        self._passive_block_until = max(self._passive_block_until, time.time() + duration)
+
+    def should_block_passive(self, reason: str = "") -> bool:
+        now = time.time()
+        if now < self._passive_block_until:
+            return True
+        for record in self._records.values():
+            if not record.enabled or not record.loaded or not record.instance:
+                continue
+            handler = getattr(record.instance, "should_block_passive", None)
+            if not callable(handler):
+                handler = getattr(record.instance, "on_should_block_passive", None)
+            if not callable(handler):
+                continue
+            try:
+                result = handler(reason)
+                if bool(result):
+                    return True
+            except Exception:
+                logger.exception("plugin hook failed: %s should_block_passive", record.info.plugin_id)
+                self._append_log(record.info.plugin_id, "error", "should_block_passive failed")
+        return False
 
     def _read_manifest(self, manifest_path: str) -> PluginInfo | None:
         try:
@@ -278,6 +315,7 @@ class PluginManager:
                     bridge=self.bridge,
                     log_handler=self._append_log,
                     ai_context_handler=self._append_ai_context,
+                    passive_block_handler=self.block_passive,
                 )
                 record.load(context)
                 if record.error:
@@ -317,6 +355,7 @@ class PluginManager:
                 bridge=self.bridge,
                 log_handler=self._append_log,
                 ai_context_handler=self._append_ai_context,
+                passive_block_handler=self.block_passive,
             )
             record.load(context)
             if record.error:

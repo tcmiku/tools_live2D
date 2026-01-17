@@ -4,6 +4,7 @@ import json
 import os
 import re
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -153,6 +154,8 @@ class WeatherPlugin:
         self.context = context
         self._config = self._load_config()
         self._settings_dialog = None
+        self._startup_block_seconds = 4.0
+        self._startup_delay_seconds = 2.0
 
     def on_app_ready(self) -> None:
         if not self._config.auto_report:
@@ -247,9 +250,12 @@ class WeatherPlugin:
             )
 
     def _report_today_startup(self) -> None:
+        if self._startup_delay_seconds > 0:
+            time.sleep(self._startup_delay_seconds)
         message = self._build_weather_message()
         if message:
             self.context.bridge.push_passive_message(message)
+            self.context.block_passive(self._startup_block_seconds)
 
     def _build_weather_message(self, config: WeatherConfig | None = None) -> str:
         config = config or self._config

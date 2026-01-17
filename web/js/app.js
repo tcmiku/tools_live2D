@@ -1841,6 +1841,10 @@ function setupWindowMoveInteraction() {
 }
 
 async function loadLive2DModelFromUrl(modelUrl) {
+  if (!modelUrl) {
+    logStatus("模型地址为空，无法加载");
+    return false;
+  }
   const loadId = ++modelLoadSeq;
   modelLoading = true;
   updateModelSwitchButton();
@@ -1860,24 +1864,30 @@ async function loadLive2DModelFromUrl(modelUrl) {
           resolution: window.devicePixelRatio || 1,
         });
       }
-      if (live2dApp.stage && typeof live2dApp.stage.removeChildren === "function") {
-        live2dApp.stage.removeChildren();
-      }
-      if (live2dModel) {
-        live2dApp.stage.removeChild(live2dModel);
-        if (typeof live2dModel.destroy === "function") {
-          live2dModel.destroy({ children: true, texture: true, baseTexture: true });
-        }
-      }
       const nextModel = await window.PIXI.live2d.Live2DModel.from(modelUrl);
-      if (loadId !== modelLoadSeq) {
-        if (typeof nextModel.destroy === "function") {
-          nextModel.destroy({ children: true, texture: true, baseTexture: true });
-        }
+      if (!nextModel) {
+        logStatus("模型加载失败：返回为空");
+        modelLoading = false;
+        updateModelSwitchButton();
         return false;
       }
+      if (loadId !== modelLoadSeq) {
+        if (nextModel && typeof nextModel.destroy === "function") {
+          nextModel.destroy({ children: true, texture: true, baseTexture: true });
+        }
+        modelLoading = false;
+        updateModelSwitchButton();
+        return false;
+      }
+      const prevModel = live2dModel;
       live2dModel = nextModel;
       live2dModel.anchor.set(0.5, 0.5);
+      if (prevModel) {
+        live2dApp.stage.removeChild(prevModel);
+        if (typeof prevModel.destroy === "function") {
+          prevModel.destroy({ children: true, texture: true, baseTexture: true });
+        }
+      }
       live2dApp.stage.addChild(live2dModel);
       positionLive2D();
       applyAnimationSpeed();
@@ -1888,7 +1898,11 @@ async function loadLive2DModelFromUrl(modelUrl) {
     }
 
     if (typeof window.loadLive2D === "function") {
-      if (loadId !== modelLoadSeq) return false;
+      if (loadId !== modelLoadSeq) {
+        modelLoading = false;
+        updateModelSwitchButton();
+        return false;
+      }
       window.loadLive2D("canvas", modelUrl);
       logStatus("已加载Live2D 模型");
       modelLoading = false;

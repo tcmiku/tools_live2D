@@ -9,6 +9,7 @@ class Plugin:
         self._last_status = None
 
     def on_app_ready(self) -> None:
+        self.context.block_passive(2.0)
         self.context.bridge.push_passive_message("Sample plugin ready.")
 
     def on_state(self, state: dict) -> None:
