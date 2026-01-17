@@ -827,35 +827,37 @@
         position: absolute;
         right: 16px;
         bottom: 16px;
-        display: flex;
-        gap: 8px;
-        padding: 6px 8px;
+        width: 48px;
+        height: 48px;
         border-radius: 999px;
         background: rgba(18, 22, 30, 0.75);
         border: 1px solid rgba(120, 150, 210, 0.25);
         box-shadow: 0 12px 24px rgba(8, 12, 20, 0.35);
         z-index: 14;
         opacity: 0.85;
-        overflow: hidden;
-        max-width: 360px;        transition: max-width 0.2s ease, padding 0.2s ease, opacity 0.2s ease;
+        transition: width 0.2s ease, height 0.2s ease, opacity 0.2s ease;
       }
-      #quick-toolbar.collapsed {
-        padding: 6px;
-        max-width: 40px;
-        gap: 0;
+      #quick-toolbar:not(.collapsed) {
+        width: 170px;
+        height: 170px;
       }
-#quick-toolbar.collapsed .quick-btn:not(.collapse-btn) {
-        display: none;
+      #quick-toolbar.collapsed .quick-btn.radial {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.2);
+        pointer-events: none;
       }
-#quick-toolbar.hidden {
+      #quick-toolbar.hidden {
         opacity: 0.2;
       }
       #quick-toolbar:hover {
         opacity: 1;
       }
       .quick-btn {
-        width: 28px;
-        height: 28px;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 26px;
+        height: 26px;
         border-radius: 999px;
         border: 1px solid rgba(120, 150, 210, 0.4);
         background: rgba(18, 26, 40, 0.85);
@@ -865,6 +867,18 @@
         align-items: center;
         justify-content: center;
         cursor: pointer;
+        transform: translate(-50%, -50%);
+        transition: transform 0.2s ease, opacity 0.2s ease, background 0.2s ease;
+      }
+      .quick-btn.radial {
+        --radius: 68px;
+        transform: translate(-50%, -50%) rotate(var(--angle)) translate(var(--radius))
+          rotate(calc(-1 * var(--angle)));
+      }
+      .quick-btn.collapse-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 13px;
       }
       .quick-btn:hover {
         background: rgba(38, 54, 82, 0.95);
@@ -888,12 +902,12 @@
       <canvas id="canvas"></canvas>
       <div id="speech-bubble"></div>
     <div id="quick-toolbar" class="collapsed">
-        <button id="quick-toggle" class="quick-btn" data-tooltip="显示/隐藏">&#x1F3AF;</button>
-        <button id="quick-note" class="quick-btn" data-tooltip="便签">&#x1F4DD;</button>
-        <button id="quick-pomodoro" class="quick-btn" data-tooltip="番茄钟">&#x23F0;</button>
-        <button id="quick-model" class="quick-btn" data-tooltip="切换模型">&#x1F3AD;</button>
-        <button id="quick-launcher" class="quick-btn" data-tooltip="启动器">&#x1F5A5;</button>
-        <button id="quick-settings" class="quick-btn" data-tooltip="设置">&#9881;</button>
+        <button id="quick-toggle" class="quick-btn radial" style="--angle: 270deg" data-tooltip="显示/隐藏">&#x1F3AF;</button>
+        <button id="quick-note" class="quick-btn radial" style="--angle: 330deg" data-tooltip="便签">&#x1F4DD;</button>
+        <button id="quick-pomodoro" class="quick-btn radial" style="--angle: 30deg" data-tooltip="番茄钟">&#x23F0;</button>
+        <button id="quick-model" class="quick-btn radial" style="--angle: 90deg" data-tooltip="切换模型">&#x1F3AD;</button>
+        <button id="quick-launcher" class="quick-btn radial" style="--angle: 150deg" data-tooltip="启动器">&#x1F5A5;</button>
+        <button id="quick-settings" class="quick-btn radial" style="--angle: 210deg" data-tooltip="设置">&#9881;</button>
         <button id="quick-collapse" class="quick-btn collapse-btn" data-tooltip="展开/收起">&#x25C0;</button>
       </div>
       <div id="chat-panel" class="collapsed">

@@ -106,6 +106,7 @@ class AppSettings:
             "hotkey_pomodoro": "Ctrl+Shift+T",
             "hotkey_model_edit": "Ctrl+Shift+M",
             "hotkey_launcher_panel": "Ctrl+Shift+Space",
+            "hotkey_chat_toggle": "Ctrl+H",
             "last_login_date": "",
             "login_streak": 0,
             "model_edit_mode": False,

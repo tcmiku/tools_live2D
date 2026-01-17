@@ -290,11 +290,13 @@ class SettingsDialog(QDialog):
         self.hotkey_pomodoro = QLineEdit()
         self.hotkey_model_edit = QLineEdit()
         self.hotkey_launcher = QLineEdit()
+        self.hotkey_chat_toggle = QLineEdit()
         self.hotkey_toggle.setPlaceholderText("Ctrl+Shift+L")
         self.hotkey_note.setPlaceholderText("Ctrl+Shift+P")
         self.hotkey_pomodoro.setPlaceholderText("Ctrl+Shift+T")
         self.hotkey_model_edit.setPlaceholderText("Ctrl+Shift+M")
         self.hotkey_launcher.setPlaceholderText("Ctrl+Shift+Space")
+        self.hotkey_chat_toggle.setPlaceholderText("Ctrl+H")
 
         self.model_edit_mode_btn = QPushButton("开启模型编辑模式")
         self.model_edit_mode_btn.setCheckable(True)
@@ -317,6 +319,7 @@ class SettingsDialog(QDialog):
         form.addRow("热键：番茄钟", self.hotkey_pomodoro)
         form.addRow("热键：模型编辑", self.hotkey_model_edit)
         form.addRow("热键：启动面板", self.hotkey_launcher)
+        form.addRow("热键：聊天框", self.hotkey_chat_toggle)
         form.addRow(self.model_edit_mode_btn)
 
         self.buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
@@ -339,6 +342,7 @@ class SettingsDialog(QDialog):
         self.hotkey_pomodoro.setText(str(data.get("hotkey_pomodoro", "Ctrl+Shift+T")))
         self.hotkey_model_edit.setText(str(data.get("hotkey_model_edit", "Ctrl+Shift+M")))
         self.hotkey_launcher.setText(str(data.get("hotkey_launcher_panel", "Ctrl+Shift+Space")))
+        self.hotkey_chat_toggle.setText(str(data.get("hotkey_chat_toggle", "Ctrl+H")))
         edit_mode = bool(data.get("model_edit_mode", False))
         self.model_edit_mode_btn.setChecked(edit_mode)
         self.model_edit_mode_btn.setText("关闭模型编辑模式" if edit_mode else "开启模型编辑模式")
@@ -361,6 +365,7 @@ class SettingsDialog(QDialog):
             "hotkey_pomodoro": self.hotkey_pomodoro.text().strip(),
             "hotkey_model_edit": self.hotkey_model_edit.text().strip(),
             "hotkey_launcher_panel": self.hotkey_launcher.text().strip(),
+            "hotkey_chat_toggle": self.hotkey_chat_toggle.text().strip(),
             "model_edit_mode": bool(self.model_edit_mode_btn.isChecked()),
         }
 

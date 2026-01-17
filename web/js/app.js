@@ -70,6 +70,7 @@ let settingsState = {
   local_location: "",
   favor: 50,
   mood: 60,
+  hotkey_chat_toggle: "Ctrl+H",
 };
 let moodState = { score: 60, label: "平静", emoji: "😐" };
 let noteState = "";
@@ -732,10 +733,50 @@ function closeAllPanels() {
 
 function setupGlobalShortcuts() {
   document.addEventListener("keydown", (event) => {
+    const chatHotkey = settingsState.hotkey_chat_toggle || "Ctrl+H";
+    if (matchesHotkey(event, chatHotkey)) {
+      event.preventDefault();
+      toggleChatPanelVisibility();
+      return;
+    }
     if (event.key !== "Escape") return;
     event.preventDefault();
     closeAllPanels();
   });
+}
+
+function matchesHotkey(event, hotkeyText) {
+  if (!hotkeyText) return false;
+  const parts = String(hotkeyText)
+    .split("+")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (!parts.length) return false;
+  const expected = { ctrl: false, shift: false, alt: false, meta: false, key: "" };
+  parts.forEach((part) => {
+    const lower = part.toLowerCase();
+    if (lower === "ctrl" || lower === "control") {
+      expected.ctrl = true;
+    } else if (lower === "shift") {
+      expected.shift = true;
+    } else if (lower === "alt") {
+      expected.alt = true;
+    } else if (lower === "meta" || lower === "win" || lower === "cmd" || lower === "command") {
+      expected.meta = true;
+    } else {
+      expected.key = part;
+    }
+  });
+  if (!expected.key) return false;
+  if (event.ctrlKey !== expected.ctrl) return false;
+  if (event.shiftKey !== expected.shift) return false;
+  if (event.altKey !== expected.alt) return false;
+  if (event.metaKey !== expected.meta) return false;
+  const key = event.key || "";
+  if (expected.key.toLowerCase() === "space") {
+    return key === " " || event.code === "Space";
+  }
+  return key.toLowerCase() === expected.key.toLowerCase();
 }
 
 function setupPanelDrag() {
@@ -1056,9 +1097,9 @@ function setupQuickToolbar() {
   if (collapseBtn) {
     collapseBtn.addEventListener("click", () => {
       toolbar.classList.toggle("collapsed");
-      collapseBtn.textContent = toolbar.classList.contains("collapsed") ? "◂" : "▸";
+      collapseBtn.textContent = toolbar.classList.contains("collapsed") ? "\u25C0" : "\u25B6";
     });
-    collapseBtn.textContent = toolbar.classList.contains("collapsed") ? "◂" : "▸";
+    collapseBtn.textContent = toolbar.classList.contains("collapsed") ? "\u25C0" : "\u25B6";
   }
 
   if (toggleBtn) {
