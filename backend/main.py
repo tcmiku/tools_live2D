@@ -61,6 +61,7 @@ try:
     from .reminders import ReminderEngine, ReminderStore, ReminderConfig
     from .login_rewards import apply_daily_login
     from .passive_chat import PassiveChatEngine, PassiveChatConfig
+    from .texts import TextCatalog
     from .binding_utils import extract_motions_expressions
     from .launchers import LauncherManager
     from .plugins import PluginManager
@@ -79,6 +80,7 @@ except ImportError:
     from reminders import ReminderEngine, ReminderStore, ReminderConfig
     from login_rewards import apply_daily_login
     from passive_chat import PassiveChatEngine, PassiveChatConfig
+    from texts import TextCatalog
     from plugins import PluginManager
 from binding_utils import extract_motions_expressions, list_model_paths
 from launchers import LauncherManager
@@ -1446,6 +1448,7 @@ def main() -> None:
     pomodoro = PomodoroEngine(os.path.join(BASE_DIR, "data", "pomodoro.json"))
     reminders = ReminderEngine(ReminderConfig.from_settings(settings.get_settings()))
     settings_data = settings.get_settings()
+    texts = TextCatalog(os.path.join(BASE_DIR, "data", "texts.json"))
     passive_base_config = PassiveChatConfig(
         enabled=settings_data.get("passive_enabled", True),
         interval_min=settings_data.get("passive_interval_min", 30),
@@ -1454,7 +1457,7 @@ def main() -> None:
         focus_enabled=settings_data.get("passive_focus_enabled", True),
         focus_interval_min=settings_data.get("passive_focus_interval_min", 60),
     )
-    passive_chat = PassiveChatEngine(passive_base_config)
+    passive_chat = PassiveChatEngine(passive_base_config, texts=texts)
     reminder_store = ReminderStore(os.path.join(BASE_DIR, "data", "reminders.json"))
     bindings_path = settings.get_settings().get("bindings_path", "data/model_bindings.json")
     if not os.path.isabs(bindings_path):
@@ -1471,7 +1474,7 @@ def main() -> None:
         binding_manager=binding_manager,
         launcher_manager=launcher_manager,
     )
-    plugin_manager = PluginManager(BASE_DIR, settings, bridge)
+    plugin_manager = PluginManager(BASE_DIR, settings, bridge, texts=texts)
     bridge.set_plugin_manager(plugin_manager)
     plugin_manager.load_plugins()
     plugin_manager.on_app_start()
@@ -1720,8 +1723,14 @@ def main() -> None:
     reward, streak, is_new_day = apply_daily_login(settings)
     if reward > 0:
         bridge.addFavor(float(reward))
-        bridge.push_passive_message(f"欢迎回来！连续登录第 {streak} 天，获得好感 +{reward}")
-    bridge.push_passive_message("欢迎回来～今天也一起加油吧！")
+        template = texts.get_text(
+            "system.welcome_reward",
+            "欢迎回来！连续登录第 {streak} 天，获得好感 +{reward}",
+        )
+        bridge.push_passive_message(template.format(streak=streak, reward=reward))
+    welcome_list = texts.get_list("system.welcome", ["欢迎回来～今天也一起加油吧！"])
+    if welcome_list:
+        bridge.push_passive_message(random.choice(welcome_list))
 
     hotkey_manager = HotkeyManager()
     if sys.platform.startswith("win"):
@@ -2033,26 +2042,22 @@ def main() -> None:
             bridge.push_passive_message(message)
 
         interaction_map = {
-            "typing": [
-                "加油！",
-                "键盘敲得很有节奏～",
-                "专注模式已开启！",
-            ],
-            "idle": [
-                "我有点困了，要不要休息一下？",
-                "休息片刻再继续吧。",
-                "记得活动下肩膀～",
-            ],
-            "switch": [
-                "专心一点哦。",
-                "任务切换太快会分神～",
-                "先把这一件做完？",
-            ],
-            "browser": [
-                "需要我帮你查找资料吗？",
-                "记得把要点记下来～",
-                "浏览结束记得回到任务哦。",
-            ],
+            "typing": texts.get_list(
+                "passive.interaction.typing",
+                ["加油！", "键盘敲得很有节奏～", "专注模式已开启！"],
+            ),
+            "idle": texts.get_list(
+                "passive.interaction.idle",
+                ["我有点困了，要不要休息一下？", "休息片刻再继续吧。", "记得活动下肩膀～"],
+            ),
+            "switch": texts.get_list(
+                "passive.interaction.switch",
+                ["专心一点哦。", "任务切换太快会分神～", "先把这一件做完？"],
+            ),
+            "browser": texts.get_list(
+                "passive.interaction.browser",
+                ["需要我帮你查找资料吗？", "记得把要点记下来～", "浏览结束记得回到任务哦。"],
+            ),
         }
         for event in engine.get_interaction_events(state):
             choices = interaction_map.get(event)
@@ -2114,7 +2119,11 @@ def main() -> None:
                 logging.info("pomodoro switch: focus -> break")
                 reward = reward_for_focus_minutes(int(state.get("focus_min", 25)))
                 bridge.addFavor(float(reward))
-                bridge.push_passive_message(f"完成番茄专注，获得好感 +{reward}")
+                template = texts.get_text(
+                    "system.pomodoro_complete",
+                    "完成番茄专注，获得好感 +{reward}",
+                )
+                bridge.push_passive_message(template.format(reward=reward))
             elif mode == "focus":
                 tray.showMessage("番茄钟提醒", "休息结束，开始专注。", QSystemTrayIcon.Information, 3000)
                 logging.info("pomodoro switch: break -> focus")

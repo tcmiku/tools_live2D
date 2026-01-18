@@ -27,9 +27,15 @@ class PassiveChatConfig:
 
 
 class PassiveChatEngine:
-    def __init__(self, config: PassiveChatConfig | None = None, rng: random.Random | None = None) -> None:
+    def __init__(
+        self,
+        config: PassiveChatConfig | None = None,
+        rng: random.Random | None = None,
+        texts=None,
+    ) -> None:
         self._config = config or PassiveChatConfig()
         self._rng = rng or random.Random()
+        self._texts = texts
         self._last_random_ts: float | None = None
         self._last_focus_ts: float | None = None
         self._last_context_ts: float | None = None
@@ -38,6 +44,16 @@ class PassiveChatEngine:
 
     def set_config(self, config: PassiveChatConfig) -> None:
         self._config = config
+
+    def _text_list(self, path: str, fallback: list[str]) -> list[str]:
+        if not self._texts:
+            return fallback
+        return self._texts.get_list(path, fallback)
+
+    def _text_value(self, path: str, fallback: str) -> str:
+        if not self._texts:
+            return fallback
+        return self._texts.get_text(path, fallback)
 
     def tick(self, state, now: float | None = None, hour: int | None = None) -> List[str]:
         if not self._config.enabled:
@@ -68,10 +84,14 @@ class PassiveChatEngine:
         messages: List[str] = []
         if 5 <= hour <= 10 and self._last_morning_day != day:
             self._last_morning_day = day
-            messages.append("早安！今天也一起加油吧～")
+            morning = self._text_list("passive.blessing.morning", ["早安！今天也一起加油吧～"])
+            if morning:
+                messages.append(self._rng.choice(morning))
         if 20 <= hour <= 23 and self._last_evening_day != day:
             self._last_evening_day = day
-            messages.append("晚安，记得早点休息哦。")
+            evening = self._text_list("passive.blessing.evening", ["晚安，记得早点休息哦。"])
+            if evening:
+                messages.append(self._rng.choice(evening))
         return messages
 
     def _maybe_focus(self, state, now: float) -> Iterable[str]:
@@ -86,7 +106,11 @@ class PassiveChatEngine:
             return []
         if now - self._last_focus_ts > interval:
             self._last_focus_ts = now
-            return [f"你今天已经专注了 {_format_duration(focus_seconds)}，很棒！"]
+            template = self._text_value(
+                "passive.focus_template",
+                "你今天已经专注了 {duration}，很棒！",
+            )
+            return [template.format(duration=_format_duration(focus_seconds))]
         return []
 
     def _maybe_random(self, now: float) -> Iterable[str]:
@@ -95,7 +119,9 @@ class PassiveChatEngine:
         interval = max(1, int(self._config.interval_min)) * 60
         if self._last_random_ts is None:
             self._last_random_ts = now
-            samples = [
+            samples = self._text_list(
+                "passive.random",
+                [
                 "要不要伸个懒腰？",
                 "专注一会儿再休息也可以哦～",
                 "我会一直在这里陪着你。",
@@ -127,12 +153,15 @@ class PassiveChatEngine:
                 "目标就在前面，冲～",
                 "保持呼吸节奏，心态放轻松。",
                 "今天也要元气满满！",
-            ]
+                ],
+            )
             return [self._rng.choice(samples)]
         if now - self._last_random_ts < interval:
             return []
         self._last_random_ts = now
-        samples = [
+        samples = self._text_list(
+            "passive.random",
+            [
             "要不要伸个懒腰？",
             "专注一会儿再休息也可以哦～",
             "我会一直在这里陪着你。",
@@ -164,7 +193,8 @@ class PassiveChatEngine:
             "目标就在前面，冲～",
             "保持呼吸节奏，心态放轻松。",
             "今天也要元气满满！",
-        ]
+            ],
+        )
         return [self._rng.choice(samples)]
 
     def get_contextual_message(self, state, window_title: str, now: float | None = None) -> str | None:
@@ -177,45 +207,53 @@ class PassiveChatEngine:
         title = (window_title or "").lower()
         if "vscode" in title or "pycharm" in title or "visual studio code" in title:
             self._last_context_ts = now
-            return self._rng.choice(
+            choices = self._text_list(
+                "passive.context.vscode",
                 [
                     "代码写得不错，继续保持！",
                     "这段代码很顺手，再推进一点～",
                     "写代码别太赶，稳一点更好。",
                     "代码结构清晰！你在变强。",
                     "代码调试顺利吗？需要我打打气吗？",
-                ]
+                ],
             )
+            return self._rng.choice(choices)
         if any(b in title for b in ["chrome", "edge", "firefox"]):
             self._last_context_ts = now
-            return self._rng.choice(
+            choices = self._text_list(
+                "passive.context.browser",
                 [
                     "查资料吗？需要我帮你记点什么吗？",
                     "查资料别太久，记住重点就好～",
                     "查资料时顺手记下关键词吧。",
                     "查资料要不要我帮你整理要点？",
                     "查资料看到好内容就收藏一下吧。",
-                ]
+                ],
             )
+            return self._rng.choice(choices)
         if any(d in title for d in ["photoshop", "figma", "design"]):
             self._last_context_ts = now
-            return self._rng.choice(
+            choices = self._text_list(
+                "passive.context.design",
                 [
                     "设计得真棒！记得休息一下眼睛哦～",
                     "设计配色挺舒服的，继续加油！",
                     "设计细节很赞，别忘了保存版本。",
                     "这个设计版式很有感觉～",
                     "设计再微调一点点就更完美了。",
-                ]
+                ],
             )
+            return self._rng.choice(choices)
         if getattr(state, "status", "") == "sleep":
             self._last_context_ts = now
-            return self._rng.choice(
+            choices = self._text_list(
+                "passive.context.sleep",
                 [
                     "我有点困了，你也休息一下吧？",
                     "休息片刻再回来，会更清醒哦。",
                     "闭眼一分钟，休息一下会更轻松～",
                     "起来活动下吧，休息一下肩颈也需要关照。",
-                ]
+                ],
             )
+            return self._rng.choice(choices)
         return None

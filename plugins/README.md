@@ -73,6 +73,7 @@ plugins/
 - `context.settings`（AppSettings 实例）
 - `context.bridge`（BackendBridge 实例）
 - `context.block_passive(seconds)`：短时间阻断被动提示，避免插件气泡被打断。
+- `context.add_texts(path, items)`：向文本库追加被动语句（如 `passive.random`），供气泡系统使用。
 
 数据文件：
 

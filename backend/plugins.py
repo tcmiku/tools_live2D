@@ -50,6 +50,7 @@ class PluginContext:
         self._log_handler = log_handler
         self._ai_context_handler = ai_context_handler
         self._passive_block_handler = passive_block_handler
+        self._text_add_handler = None
 
     def get_data_path(self, *parts: str) -> str:
         path = os.path.join(self.data_dir, "plugins", self.plugin_id, *parts)
@@ -80,6 +81,10 @@ class PluginContext:
     def block_passive(self, seconds: float = 2.0) -> None:
         if self._passive_block_handler:
             self._passive_block_handler(seconds)
+
+    def add_texts(self, path: str, items: list[str]) -> None:
+        if self._text_add_handler:
+            self._text_add_handler(path, items)
 
 
 class PluginRecord:
@@ -194,10 +199,11 @@ class PluginRecord:
 
 
 class PluginManager:
-    def __init__(self, base_dir: str, settings: Any, bridge: Any) -> None:
+    def __init__(self, base_dir: str, settings: Any, bridge: Any, texts: Any = None) -> None:
         self.base_dir = base_dir
         self.settings = settings
         self.bridge = bridge
+        self.texts = texts
         self.data_dir = os.path.join(base_dir, "data")
         self.plugin_root = os.path.join(base_dir, "plugins")
         os.makedirs(self.plugin_root, exist_ok=True)
@@ -317,6 +323,7 @@ class PluginManager:
                     ai_context_handler=self._append_ai_context,
                     passive_block_handler=self.block_passive,
                 )
+                context._text_add_handler = self._add_texts_from_plugin
                 record.load(context)
                 if record.error:
                     self._append_log(info.plugin_id, "error", record.error)
@@ -357,6 +364,7 @@ class PluginManager:
                 ai_context_handler=self._append_ai_context,
                 passive_block_handler=self.block_passive,
             )
+            context._text_add_handler = self._add_texts_from_plugin
             record.load(context)
             if record.error:
                 self._append_log(info.plugin_id, "error", record.error)
@@ -422,6 +430,11 @@ class PluginManager:
             self._ai_context.append(line)
             if len(self._ai_context) > 50:
                 self._ai_context = self._ai_context[-50:]
+
+    def _add_texts_from_plugin(self, path: str, items: list[str]) -> None:
+        if not self.texts:
+            return
+        self.texts.add_texts(path, items or [])
 
     def collect_ai_context(self, user_text: str) -> list[str]:
         collected: list[str] = []

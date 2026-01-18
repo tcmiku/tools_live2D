@@ -9,6 +9,10 @@ class Plugin:
         self._last_status = None
 
     def on_app_ready(self) -> None:
+        self.context.add_texts(
+            "passive.random",
+            ["Keep going! I'm right here with you.", "Tiny progress is still progress."],
+        )
         self.context.block_passive(2.0)
         self.context.bridge.push_passive_message("Sample plugin ready.")
 
