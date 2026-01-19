@@ -9,7 +9,17 @@ import random
 import ctypes
 from datetime import date
 
-from PySide6.QtCore import QTimer, Qt, QUrl, QPoint, QProcess, QAbstractTableModel, QModelIndex, QDateTime
+from PySide6.QtCore import (
+    QTimer,
+    Qt,
+    QUrl,
+    QPoint,
+    QProcess,
+    QAbstractTableModel,
+    QModelIndex,
+    QDateTime,
+    QCoreApplication,
+)
 from PySide6.QtGui import QIcon, QGuiApplication, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
@@ -86,11 +96,65 @@ from binding_utils import extract_motions_expressions, list_model_paths
 from launchers import LauncherManager
 
 
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-WEB_DIR = os.path.join(BASE_DIR, "web")
-ASSETS_DIR = os.path.join(BASE_DIR, "assets")
+def resolve_base_dir() -> str:
+    override = os.getenv("TOOLS_LIVE2D_HOME")
+    if override:
+        return os.path.abspath(override)
+    if getattr(sys, "frozen", False):
+        return os.path.abspath(os.path.dirname(sys.executable))
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+
+BASE_DIR = resolve_base_dir()
+RESOURCE_DIR = os.path.abspath(getattr(sys, "_MEIPASS", BASE_DIR)) if getattr(sys, "frozen", False) else BASE_DIR
+
+
+def resolve_web_dir() -> str:
+    candidate = os.path.join(BASE_DIR, "web", "index.html")
+    if os.path.isfile(candidate):
+        return os.path.join(BASE_DIR, "web")
+    return os.path.join(RESOURCE_DIR, "web")
+
+
+def resolve_assets_dir() -> str:
+    candidate = os.path.join(BASE_DIR, "assets")
+    if os.path.isdir(candidate):
+        return candidate
+    return os.path.join(RESOURCE_DIR, "assets")
+
+
+def list_model_paths_multi() -> list[str]:
+    paths = list_model_paths(BASE_DIR)
+    if RESOURCE_DIR != BASE_DIR:
+        for path in list_model_paths(RESOURCE_DIR):
+            if path not in paths:
+                paths.append(path)
+    return paths
+
+
+def extract_motions_expressions_multi(model_path: str) -> tuple[list[str], list[str]]:
+    motions, expressions = extract_motions_expressions(BASE_DIR, model_path)
+    if motions or expressions or RESOURCE_DIR == BASE_DIR:
+        return motions, expressions
+    return extract_motions_expressions(RESOURCE_DIR, model_path)
+
+
+WEB_DIR = resolve_web_dir()
+ASSETS_DIR = resolve_assets_dir()
 LOG_DIR = os.path.join(BASE_DIR, "data")
 LOG_PATH = os.path.join(LOG_DIR, "app.log")
+
+
+def restart_process() -> None:
+    if getattr(sys, "frozen", False):
+        program = QCoreApplication.applicationFilePath()
+        args = sys.argv[1:]
+        workdir = QCoreApplication.applicationDirPath()
+    else:
+        program = sys.executable
+        args = [os.path.abspath(__file__)] + sys.argv[1:]
+        workdir = BASE_DIR
+    QProcess.startDetached(program, args, workdir)
 
 
 class Live2DPetWindow(QWebEngineView):
@@ -576,7 +640,7 @@ class BindingDialog(QDialog):
 
     def _reload_models(self) -> None:
         current = self._settings.get_settings().get("model_path", "")
-        model_paths = list_model_paths(BASE_DIR)
+        model_paths = list_model_paths_multi()
         for path in self._binding_manager.get_all_models().keys():
             if path not in model_paths:
                 model_paths.append(path)
@@ -604,7 +668,7 @@ class BindingDialog(QDialog):
         self._refresh_model_lists()
 
     def _refresh_model_lists(self) -> None:
-        self._motions, self._expressions = extract_motions_expressions(BASE_DIR, self._model_path)
+        self._motions, self._expressions = extract_motions_expressions_multi(self._model_path)
         self._refresh_tables()
 
     def _refresh_tables(self) -> None:
@@ -1669,7 +1733,7 @@ def main() -> None:
     restart_action = menu.addAction("重启程序")
     def restart_app() -> None:
         logging.info("restart requested")
-        QProcess.startDetached(sys.executable, sys.argv)
+        restart_process()
         tray.hide()
         app.quit()
     restart_action.triggered.connect(restart_app)
@@ -1706,7 +1770,7 @@ def main() -> None:
         if path:
             tray.showMessage("数据恢复", "已恢复备份，正在重启应用。", QSystemTrayIcon.Information, 4000)
             logging.info("restore completed: %s", path)
-            QTimer.singleShot(1200, lambda: (QProcess.startDetached(sys.executable, sys.argv), app.quit()))
+            QTimer.singleShot(1200, lambda: (restart_process(), app.quit()))
         else:
             tray.showMessage("数据恢复", "恢复失败，请查看日志。", QSystemTrayIcon.Warning, 3000)
 
