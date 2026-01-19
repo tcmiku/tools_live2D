@@ -19,6 +19,8 @@ data/app.log
 
 # Local runtime data (can be regenerated)
 data/*.json
+!data/
+!data/texts.json
 
 # Local settings
 .claude/

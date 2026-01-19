@@ -1725,10 +1725,11 @@ def main() -> None:
         bridge.addFavor(float(reward))
         template = texts.get_text(
             "system.welcome_reward",
-            "欢迎回来！连续登录第 {streak} 天，获得好感 +{reward}",
+            "",
         )
-        bridge.push_passive_message(template.format(streak=streak, reward=reward))
-    welcome_list = texts.get_list("system.welcome", ["欢迎回来～今天也一起加油吧！"])
+        if template:
+            bridge.push_passive_message(template.format(streak=streak, reward=reward))
+    welcome_list = texts.get_list("system.welcome", [])
     if welcome_list:
         bridge.push_passive_message(random.choice(welcome_list))
 
@@ -2044,19 +2045,19 @@ def main() -> None:
         interaction_map = {
             "typing": texts.get_list(
                 "passive.interaction.typing",
-                ["加油！", "键盘敲得很有节奏～", "专注模式已开启！"],
+                [],
             ),
             "idle": texts.get_list(
                 "passive.interaction.idle",
-                ["我有点困了，要不要休息一下？", "休息片刻再继续吧。", "记得活动下肩膀～"],
+                [],
             ),
             "switch": texts.get_list(
                 "passive.interaction.switch",
-                ["专心一点哦。", "任务切换太快会分神～", "先把这一件做完？"],
+                [],
             ),
             "browser": texts.get_list(
                 "passive.interaction.browser",
-                ["需要我帮你查找资料吗？", "记得把要点记下来～", "浏览结束记得回到任务哦。"],
+                [],
             ),
         }
         for event in engine.get_interaction_events(state):
@@ -2121,9 +2122,10 @@ def main() -> None:
                 bridge.addFavor(float(reward))
                 template = texts.get_text(
                     "system.pomodoro_complete",
-                    "完成番茄专注，获得好感 +{reward}",
+                    "",
                 )
-                bridge.push_passive_message(template.format(reward=reward))
+                if template:
+                    bridge.push_passive_message(template.format(reward=reward))
             elif mode == "focus":
                 tray.showMessage("番茄钟提醒", "休息结束，开始专注。", QSystemTrayIcon.Information, 3000)
                 logging.info("pomodoro switch: break -> focus")
