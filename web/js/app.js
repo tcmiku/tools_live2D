@@ -2574,6 +2574,18 @@ function renderPluginList() {
       backend.reloadPlugin(String(item.id || ""));
     });
     actions.appendChild(reloadBtn);
+    if (item.has_panel) {
+      const openBtn = document.createElement("button");
+      openBtn.type = "button";
+      openBtn.textContent = "打开面板";
+      openBtn.addEventListener("click", () => {
+        if (!backend || typeof backend.openPluginPanel !== "function") return;
+        backend.openPluginPanel(String(item.id || ""));
+        const panel = document.getElementById("plugin-panel");
+        if (panel) panel.classList.remove("visible");
+      });
+      actions.appendChild(openBtn);
+    }
 
     row.appendChild(head);
     row.appendChild(meta);

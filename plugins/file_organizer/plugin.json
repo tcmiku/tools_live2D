@@ -1,0 +1,7 @@
+{
+  "id": "file_organizer",
+  "name": "File Organizer",
+  "version": "0.1.0",
+  "description": "AI 文件整理与分类管理",
+  "entry": "main.py"
+}

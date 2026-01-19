@@ -389,6 +389,11 @@ class PluginManager:
         items: list[dict[str, Any]] = []
         for plugin_id, record in sorted(self._records.items(), key=lambda item: item[0]):
             info = record.info
+            instance = record.instance
+            has_panel = bool(
+                instance
+                and (hasattr(instance, "get_panel") or hasattr(instance, "open_panel"))
+            )
             items.append(
                 {
                     "id": info.plugin_id,
@@ -397,6 +402,7 @@ class PluginManager:
                     "description": info.description,
                     "enabled": bool(record.enabled),
                     "loaded": bool(record.loaded),
+                    "has_panel": has_panel,
                     "error": record.error or "",
                     "path": info.root_dir,
                 }

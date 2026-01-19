@@ -524,6 +524,18 @@ class BackendBridge(QObject):
         if self._open_plugin_dialog:
             self._open_plugin_dialog()
 
+    @Slot(str)
+    def openPluginPanel(self, plugin_id: str) -> None:
+        if not self._plugin_manager:
+            return
+        panel = self._plugin_manager.open_plugin_panel(str(plugin_id or ""), parent=None)
+        if panel and hasattr(panel, "show"):
+            panel.show()
+            if hasattr(panel, "raise_"):
+                panel.raise_()
+            if hasattr(panel, "activateWindow"):
+                panel.activateWindow()
+
     @Slot()
     def togglePetWindow(self) -> None:
         if not self._window:
