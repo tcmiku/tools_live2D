@@ -1,46 +1,28 @@
 {
-  "source_dir": "D:/浏览器下载",
+  "source_dir": "D:/临时文件",
   "ai_provider": "OpenAI兼容",
-  "ai_model": "Qwen/Qwen3-Omni-30B-A3B-Instruct",
+  "ai_model": "Qwen/Qwen3-Omni-30B-A3B-Captioner",
   "categories": [
-    "CubismSdkForWeb-5-r.4",
-    "开发资源",
-    "软件安装包",
-    "压缩文件",
-    "图片",
-    "音频",
-    "文本",
+    "办公文档",
+    "压缩包",
+    "安装包",
     "待分类"
   ],
   "rules": {
-    "CubismSdkForWeb-5-r.4": [],
-    "开发资源": [
-      ".asar",
-      ".zip"
+    "办公文档": [
+      ".docx",
+      ".pptx",
+      ".xlsx"
     ],
-    "软件安装包": [
-      ".exe",
-      ".msi"
-    ],
-    "压缩文件": [
-      ".rar"
-    ],
-    "图片": [
-      ".jpeg"
-    ],
-    "音频": [
-      ".mp3"
-    ],
-    "文本": [
-      ".txt"
-    ],
+    "压缩包": [],
+    "安装包": [],
     "待分类": []
   },
   "options": {
     "create_subfolders": true,
     "overwrite": false,
     "include_subdirs": false,
-    "only_existing_folders": true
+    "only_existing_folders": false
   },
   "review_folder_name": "待分类",
   "ai_enabled": true

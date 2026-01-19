@@ -1,49 +1,49 @@
 [
   {
-    "ts": 1768794433,
-    "source_dir": "D:/乱",
+    "ts": 1768834887,
+    "source_dir": "D:/临时文件",
     "options": {
-      "create_subfolders": false,
+      "create_subfolders": true,
       "overwrite": false,
       "include_subdirs": false,
       "only_existing_folders": false
     },
     "moves": [
       {
-        "from": "D:/乱\\23 (1) (1).xlsx",
-        "to": "D:/乱\\待分类\\23 (1) (1).xlsx"
+        "from": "D:/临时文件\\~$0.docx",
+        "to": "D:/临时文件\\办公文档\\~$0.docx"
       },
       {
-        "from": "D:/乱\\ppt (1) (1).pptx",
-        "to": "D:/乱\\待分类\\ppt (1) (1).pptx"
+        "from": "D:/临时文件\\新建 Microsoft Excel 工作表 (2).xlsx",
+        "to": "D:/临时文件\\办公文档\\新建 Microsoft Excel 工作表 (2).xlsx"
       },
       {
-        "from": "D:/乱\\web (1) (1).docx",
-        "to": "D:/乱\\待分类\\web (1) (1).docx"
+        "from": "D:/临时文件\\新建 Microsoft Excel 工作表.xlsx",
+        "to": "D:/临时文件\\办公文档\\新建 Microsoft Excel 工作表.xlsx"
       },
       {
-        "from": "D:/乱\\222.zip",
-        "to": "D:/乱\\待分类\\222.zip"
+        "from": "D:/临时文件\\新建 Microsoft PowerPoint 演示文稿 (2).pptx",
+        "to": "D:/临时文件\\办公文档\\新建 Microsoft PowerPoint 演示文稿 (2).pptx"
       },
       {
-        "from": "D:/乱\\jdk-11.0.2版本安装包.rar",
-        "to": "D:/乱\\待分类\\jdk-11.0.2版本安装包.rar"
+        "from": "D:/临时文件\\新建 Microsoft PowerPoint 演示文稿.pptx",
+        "to": "D:/临时文件\\办公文档\\新建 Microsoft PowerPoint 演示文稿.pptx"
       },
       {
-        "from": "D:/乱\\ReShelf-1.0.1.zip",
-        "to": "D:/乱\\待分类\\ReShelf-1.0.1.zip"
+        "from": "D:/临时文件\\新建 Microsoft Word 文档.docx",
+        "to": "D:/临时文件\\办公文档\\新建 Microsoft Word 文档.docx"
       },
       {
-        "from": "D:/乱\\MineContext-0.1.4-setup.exe",
-        "to": "D:/乱\\待分类\\MineContext-0.1.4-setup.exe"
+        "from": "D:/临时文件\\新建 WinRAR 压缩文件 (2).rar",
+        "to": "D:/临时文件\\压缩包\\新建 WinRAR 压缩文件 (2).rar"
       },
       {
-        "from": "D:/乱\\node-v24.10.0-x64.msi",
-        "to": "D:/乱\\待分类\\node-v24.10.0-x64.msi"
+        "from": "D:/临时文件\\新建 WinRAR 压缩文件.rar",
+        "to": "D:/临时文件\\压缩包\\新建 WinRAR 压缩文件.rar"
       },
       {
-        "from": "D:/乱\\OllamaSetup.exe",
-        "to": "D:/乱\\待分类\\OllamaSetup.exe"
+        "from": "D:/临时文件\\MT2.19.0.apk",
+        "to": "D:/临时文件\\安装包\\MT2.19.0.apk"
       }
     ],
     "summary": {
@@ -51,132 +51,6 @@
       "moved": 9,
       "review": 0,
       "total": 9
-    }
-  },
-  {
-    "ts": 1768794511,
-    "source_dir": "D:/浏览器下载",
-    "options": {
-      "create_subfolders": true,
-      "overwrite": false,
-      "include_subdirs": false,
-      "only_existing_folders": true
-    },
-    "moves": [
-      {
-        "from": "D:/浏览器下载\\app.asar",
-        "to": "D:/浏览器下载\\开发资源\\app.asar"
-      },
-      {
-        "from": "D:/浏览器下载\\CubismSdkForWeb-5-r.4.zip",
-        "to": "D:/浏览器下载\\开发资源\\CubismSdkForWeb-5-r.4.zip"
-      },
-      {
-        "from": "D:/浏览器下载\\HTML-RWA-master.zip",
-        "to": "D:/浏览器下载\\开发资源\\HTML-RWA-master.zip"
-      },
-      {
-        "from": "D:/浏览器下载\\跑路了.zip",
-        "to": "D:/浏览器下载\\开发资源\\跑路了.zip"
-      },
-      {
-        "from": "D:/浏览器下载\\ChromeSetup.exe",
-        "to": "D:/浏览器下载\\软件安装包\\ChromeSetup.exe"
-      },
-      {
-        "from": "D:/浏览器下载\\Clash.Verge_2.4.3_x64-setup.exe",
-        "to": "D:/浏览器下载\\软件安装包\\Clash.Verge_2.4.3_x64-setup.exe"
-      },
-      {
-        "from": "D:/浏览器下载\\CursorSetup-x64-2.0.34.exe",
-        "to": "D:/浏览器下载\\软件安装包\\CursorSetup-x64-2.0.34.exe"
-      },
-      {
-        "from": "D:/浏览器下载\\dingtalk_downloader.exe",
-        "to": "D:/浏览器下载\\软件安装包\\dingtalk_downloader.exe"
-      },
-      {
-        "from": "D:/浏览器下载\\Docker Desktop Installer.exe",
-        "to": "D:/浏览器下载\\软件安装包\\Docker Desktop Installer.exe"
-      },
-      {
-        "from": "D:/浏览器下载\\Git-2.51.1-64-bit.exe",
-        "to": "D:/浏览器下载\\软件安装包\\Git-2.51.1-64-bit.exe"
-      },
-      {
-        "from": "D:/浏览器下载\\ideaIC-2025.2.4.exe",
-        "to": "D:/浏览器下载\\软件安装包\\ideaIC-2025.2.4.exe"
-      },
-      {
-        "from": "D:/浏览器下载\\ideaIU-2025.2.4.exe",
-        "to": "D:/浏览器下载\\软件安装包\\ideaIU-2025.2.4.exe"
-      },
-      {
-        "from": "D:/浏览器下载\\MineContext-0.1.4-setup.exe",
-        "to": "D:/浏览器下载\\软件安装包\\MineContext-0.1.4-setup.exe"
-      },
-      {
-        "from": "D:/浏览器下载\\node-v24.10.0-x64.msi",
-        "to": "D:/浏览器下载\\软件安装包\\node-v24.10.0-x64.msi"
-      },
-      {
-        "from": "D:/浏览器下载\\OllamaSetup.exe",
-        "to": "D:/浏览器下载\\软件安装包\\OllamaSetup.exe"
-      },
-      {
-        "from": "D:/浏览器下载\\pandoc-3.8.2.1-windows-x86_64.msi",
-        "to": "D:/浏览器下载\\软件安装包\\pandoc-3.8.2.1-windows-x86_64.msi"
-      },
-      {
-        "from": "D:/浏览器下载\\python-3.13.9-amd64.exe",
-        "to": "D:/浏览器下载\\软件安装包\\python-3.13.9-amd64.exe"
-      },
-      {
-        "from": "D:/浏览器下载\\QQ_9.9.22_251023_x64_01.exe",
-        "to": "D:/浏览器下载\\软件安装包\\QQ_9.9.22_251023_x64_01.exe"
-      },
-      {
-        "from": "D:/浏览器下载\\Setup.Microsoft.PowerAutomate.exe",
-        "to": "D:/浏览器下载\\软件安装包\\Setup.Microsoft.PowerAutomate.exe"
-      },
-      {
-        "from": "D:/浏览器下载\\sysdiag-all-x64-6.0.7.14-2025.10.26.1.exe",
-        "to": "D:/浏览器下载\\软件安装包\\sysdiag-all-x64-6.0.7.14-2025.10.26.1.exe"
-      },
-      {
-        "from": "D:/浏览器下载\\Trae CN-Setup-x64.exe",
-        "to": "D:/浏览器下载\\软件安装包\\Trae CN-Setup-x64.exe"
-      },
-      {
-        "from": "D:/浏览器下载\\WeChatWin_4.1.2.exe",
-        "to": "D:/浏览器下载\\软件安装包\\WeChatWin_4.1.2.exe"
-      },
-      {
-        "from": "D:/浏览器下载\\weiruancyyunxkuheji2025.02.03.exe",
-        "to": "D:/浏览器下载\\软件安装包\\weiruancyyunxkuheji2025.02.03.exe"
-      },
-      {
-        "from": "D:/浏览器下载\\jdk-11.0.2版本安装包.rar",
-        "to": "D:/浏览器下载\\压缩文件\\jdk-11.0.2版本安装包.rar"
-      },
-      {
-        "from": "D:/浏览器下载\\back.jpeg",
-        "to": "D:/浏览器下载\\图片\\back.jpeg"
-      },
-      {
-        "from": "D:/浏览器下载\\1.mp3",
-        "to": "D:/浏览器下载\\音频\\1.mp3"
-      },
-      {
-        "from": "D:/浏览器下载\\20251020001224-PVnnfXQjGwUMbtbu.mp3.txt",
-        "to": "D:/浏览器下载\\文本\\20251020001224-PVnnfXQjGwUMbtbu.mp3.txt"
-      }
-    ],
-    "summary": {
-      "failed": 0,
-      "moved": 27,
-      "review": 0,
-      "total": 27
     }
   }
 ]

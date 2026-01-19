@@ -109,3 +109,43 @@ preview source=D:/乱
 [2026-01-19 16:59:45] [info] file organizer plugin loaded
 [2026-01-19 17:02:20] [info] file organizer plugin loaded
 [2026-01-19 17:06:23] [info] file organizer plugin loaded
+[2026-01-19 19:08:20] [info] file organizer plugin loaded
+[2026-01-19 19:09:10] [info] 让我看看这些文件，马上给你想一套分类。
+[2026-01-19 19:09:10] [info] ai category generation started
+[2026-01-19 19:09:12] [info] 分类想好了，已经整理到列表里啦。
+[2026-01-19 19:09:29] [info] 我先给你预览一下，不会动文件的。
+[2026-01-19 19:09:29] [info] task started: mode=preview source=D:/浏览器下载
+[2026-01-19 19:09:29] [info] preview generated
+[2026-01-19 19:09:29] [info] 预览好了，先看看再决定要不要整理吧。
+[2026-01-19 19:09:34] [info] 我开始整理啦，过程里会告诉你进度。
+[2026-01-19 19:09:34] [info] task started: mode=run source=D:/浏览器下载
+[2026-01-19 19:09:34] [info] task finished: moved=30 failed=0
+[2026-01-19 19:09:34] [info] 整理完成啦，文件已经各就各位。
+[2026-01-19 19:10:28] [info] file organizer plugin loaded
+[2026-01-19 22:54:00] [info] history cleared
+[2026-01-19 22:54:00] [info] 历史记录我清空了。
+[2026-01-19 22:55:16] [info] 让我看看这些文件，马上给你想一套分类。
+[2026-01-19 22:55:16] [info] ai category generation started
+[2026-01-19 22:55:18] [info] 分类想好了，已经整理到列表里啦。
+[2026-01-19 22:55:22] [info] 我先给你预览一下，不会动文件的。
+[2026-01-19 22:55:22] [info] task started: mode=preview source=D:/临时文件
+[2026-01-19 22:55:22] [info] preview generated
+[2026-01-19 22:55:22] [info] 预览好了，先看看再决定要不要整理吧。
+[2026-01-19 22:55:28] [info] 我开始整理啦，过程里会告诉你进度。
+[2026-01-19 22:55:29] [info] task started: mode=run source=D:/临时文件
+[2026-01-19 22:55:29] [info] task finished: moved=9 failed=0
+[2026-01-19 22:55:29] [info] 整理完成啦，文件已经各就各位。
+[2026-01-19 23:00:38] [info] file organizer plugin loaded
+[2026-01-19 23:01:01] [info] undo completed: moved=9 failed=0
+[2026-01-19 23:01:02] [info] 上一次整理我帮你撤回啦。
+[2026-01-19 23:01:16] [info] 让我看看这些文件，马上给你想一套分类。
+[2026-01-19 23:01:16] [info] ai category generation started
+[2026-01-19 23:01:17] [info] 分类想好了，已经整理到列表里啦。
+[2026-01-19 23:01:19] [info] 我先给你预览一下，不会动文件的。
+[2026-01-19 23:01:19] [info] task started: mode=preview source=D:/临时文件
+[2026-01-19 23:01:20] [info] preview generated
+[2026-01-19 23:01:20] [info] 预览好了，先看看再决定要不要整理吧。
+[2026-01-19 23:01:26] [info] 我开始整理啦，过程里会告诉你进度。
+[2026-01-19 23:01:26] [info] task started: mode=run source=D:/临时文件
+[2026-01-19 23:01:27] [info] task finished: moved=9 failed=0
+[2026-01-19 23:01:27] [info] 整理完成啦，文件已经各就各位。

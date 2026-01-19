@@ -492,8 +492,9 @@ class CategorySuggestWorker(QObject):
             cleaned.append({"name": name, "exts": cleaned_exts})
         return cleaned
 
-class Plugin:
+class Plugin(QObject):
     def __init__(self, context) -> None:
+        super().__init__()
         self.context = context
         self.config_path = context.get_data_path("config.json")
         self.history_path = context.get_data_path("history.json")
@@ -510,6 +511,7 @@ class Plugin:
         self._worker: OrganizerWorker | None = None
         self._ai_thread: QThread | None = None
         self._ai_worker: CategorySuggestWorker | None = None
+        self._current_mode: str | None = None
         self._build_ui_state()
 
     def on_load(self, context) -> None:
@@ -1073,6 +1075,7 @@ class Plugin:
                 self.context.warn(f"blocked organizing app directory: {target_dir}")
                 return
         ai_call = self._get_ai_call()
+        self._current_mode = mode
         self._thread = QThread()
         self._worker = OrganizerWorker(
             mode=mode,
@@ -1088,10 +1091,7 @@ class Plugin:
         self._thread.started.connect(self._worker.run)
         self._worker.previewReady.connect(self._on_preview_ready, Qt.QueuedConnection)
         self._worker.progress.connect(self._on_progress, Qt.QueuedConnection)
-        self._worker.finished.connect(
-            lambda summary, moves: self._on_finished(mode, summary, moves),
-            Qt.QueuedConnection,
-        )
+        self._worker.finished.connect(self._on_finished, Qt.QueuedConnection)
         self._worker.error.connect(self._on_error, Qt.QueuedConnection)
         self._thread.finished.connect(self._cleanup_worker, Qt.QueuedConnection)
         self._thread.start()
@@ -1122,6 +1122,7 @@ class Plugin:
             self._thread.deleteLater()
         self._thread = None
         self._worker = None
+        self._current_mode = None
         self._set_busy(False)
 
     def _stop_ai_worker(self) -> None:
@@ -1166,7 +1167,8 @@ class Plugin:
         self.progress_bar.setValue(min(total, moved + failed))
         self.status_label.setText(f"总数 {total} | 已移动 {moved} | 失败 {failed}")
 
-    def _on_finished(self, mode: str, summary: dict, moves: list) -> None:
+    def _on_finished(self, summary: dict, moves: list) -> None:
+        mode = self._current_mode or "run"
         if mode == "run":
             record = {
                 "ts": int(time.time()),
