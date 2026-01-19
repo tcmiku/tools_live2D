@@ -1,0 +1,21 @@
+[2026-01-16 16:49:38] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-16 16:51:12] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-16 17:08:13] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-16 17:23:46] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-16 17:25:35] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-19 09:13:30] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-19 09:35:19] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-19 10:08:07] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-19 10:56:03] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-19 11:00:32] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-19 11:01:15] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-19 11:08:34] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-19 11:08:35] [error] request failed: HTTP 500
+[2026-01-19 11:19:32] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-19 11:22:51] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-19 11:24:32] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-19 11:36:06] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-19 11:37:47] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-19 11:43:24] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-19 11:45:27] [info] request: https://aider.meizu.com/app/weather/listWeather?cityIds=101200101
+[2026-01-19 11:45:27] [error] request failed: HTTP 500
