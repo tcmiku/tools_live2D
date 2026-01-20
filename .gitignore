@@ -21,6 +21,7 @@ data/app.log
 data/*.json
 !data/
 !data/texts.json
+data/plugins/
 
 # Local settings
 .claude/
