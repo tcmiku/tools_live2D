@@ -1066,7 +1066,11 @@ class Plugin(QObject):
         if base_dir:
             base_dir = os.path.abspath(base_dir)
             target_dir = os.path.abspath(source_dir)
-            if os.path.commonpath([base_dir, target_dir]) == base_dir:
+            try:
+                is_inside_base = os.path.commonpath([base_dir, target_dir]) == base_dir
+            except ValueError:
+                is_inside_base = False
+            if is_inside_base:
                 QMessageBox.warning(
                     None,
                     "提示",
