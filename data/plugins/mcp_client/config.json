@@ -1,0 +1,39 @@
+{
+  "enabled": true,
+  "tool_call_mode": "strict",
+  "risk_confirm": {
+    "enabled": false,
+    "remember": true,
+    "remembered": {}
+  },
+  "file_scope": {
+    "allowed_dirs": []
+  },
+  "tool_allowlist": [],
+  "tool_denylist": [],
+  "ai_api": {
+    "mode": "reuse",
+    "base_url": "",
+    "api_key": "",
+    "model": ""
+  },
+  "install_tools": {
+    "npm_path": "",
+    "npx_path": ""
+  },
+  "servers": [
+    {
+      "id": "bilibili-search",
+      "name": "bilibili-search",
+      "protocol": "stdio",
+      "url": "",
+      "token": "",
+      "command": "npx",
+      "args": [
+        "bilibili-mcp-js"
+      ],
+      "enabled": true
+    }
+  ],
+  "default_server": "bilibili-search"
+}

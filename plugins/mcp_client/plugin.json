@@ -1,0 +1,7 @@
+{
+  "id": "mcp_client",
+  "name": "MCP Client",
+  "version": "0.1.0",
+  "description": "MCP 工具调用客户端",
+  "entry": "main.py"
+}
