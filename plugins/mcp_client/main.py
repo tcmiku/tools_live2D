@@ -344,6 +344,7 @@ class Plugin:
         self.history = _read_json(self.history_path, [])
         self._tools_cache: list[dict] = []
         self._ui_dispatcher = UiDispatcher()
+        self._is_applying = False
         self._build_ui_state()
 
     def on_load(self, context) -> None:
@@ -398,12 +399,14 @@ class Plugin:
         server_actions = QHBoxLayout()
         self.add_server_btn = QPushButton("新增")
         self.remove_server_btn = QPushButton("删除")
+        self.save_server_btn = QPushButton("保存服务器")
         self.default_server_btn = QPushButton("设为默认")
         self.refresh_tools_btn = QPushButton("刷新工具")
         self.test_server_btn = QPushButton("测试连接")
         self.import_json_btn = QPushButton("导入JSON")
         server_actions.addWidget(self.add_server_btn)
         server_actions.addWidget(self.remove_server_btn)
+        server_actions.addWidget(self.save_server_btn)
         server_actions.addWidget(self.default_server_btn)
         server_actions.addWidget(self.refresh_tools_btn)
         server_actions.addWidget(self.test_server_btn)
@@ -451,6 +454,8 @@ class Plugin:
         self.ai_model = QLineEdit()
         self.allowed_dirs = QListWidget()
         self.add_dir_btn = QPushButton("添加目录")
+        self.save_settings_btn = QPushButton("保存设置")
+        self.reload_settings_btn = QPushButton("重新加载")
 
         settings_layout.addRow(self.enabled_toggle)
         settings_layout.addRow("工具调用格式", self.call_mode_combo)
@@ -461,6 +466,11 @@ class Plugin:
         settings_layout.addRow("AI Model", self.ai_model)
         settings_layout.addRow("允许文件目录", self.allowed_dirs)
         settings_layout.addRow(self.add_dir_btn)
+        settings_actions = QHBoxLayout()
+        settings_actions.addWidget(self.save_settings_btn)
+        settings_actions.addWidget(self.reload_settings_btn)
+        settings_actions.addStretch(1)
+        settings_layout.addRow(QWidget(), settings_actions)
 
         install_tab = QWidget()
         install_layout = QFormLayout(install_tab)
@@ -495,6 +505,7 @@ class Plugin:
 
         self.add_server_btn.clicked.connect(self._add_server)
         self.remove_server_btn.clicked.connect(self._remove_server)
+        self.save_server_btn.clicked.connect(self._save_server_detail)
         self.default_server_btn.clicked.connect(self._set_default_server)
         self.refresh_tools_btn.clicked.connect(self._refresh_tools)
         self.test_server_btn.clicked.connect(self._test_server)
@@ -506,23 +517,25 @@ class Plugin:
         self.npx_install_btn.clicked.connect(self._run_npx_install)
         self.detect_tools_btn.clicked.connect(self._detect_install_tools)
         self.cancel_install_btn.clicked.connect(self._cancel_install)
-        self.npm_path.textChanged.connect(self._save_config_from_ui)
-        self.npx_path.textChanged.connect(self._save_config_from_ui)
+        self.npm_path.editingFinished.connect(self._save_config_from_ui)
+        self.npx_path.editingFinished.connect(self._save_config_from_ui)
         self.enabled_toggle.toggled.connect(self._save_config_from_ui)
         self.call_mode_combo.currentIndexChanged.connect(self._save_config_from_ui)
         self.risk_confirm_toggle.toggled.connect(self._save_config_from_ui)
         self.ai_mode_combo.currentIndexChanged.connect(self._save_config_from_ui)
-        self.ai_base_url.textChanged.connect(self._save_config_from_ui)
-        self.ai_api_key.textChanged.connect(self._save_config_from_ui)
-        self.ai_model.textChanged.connect(self._save_config_from_ui)
+        self.ai_base_url.editingFinished.connect(self._save_config_from_ui)
+        self.ai_api_key.editingFinished.connect(self._save_config_from_ui)
+        self.ai_model.editingFinished.connect(self._save_config_from_ui)
         self.server_table.selectionModel().selectionChanged.connect(self._on_server_selected)
-        self.server_name.textChanged.connect(self._save_server_detail)
+        self.server_name.editingFinished.connect(self._save_server_detail)
         self.server_protocol.currentIndexChanged.connect(self._save_server_detail)
-        self.server_url.textChanged.connect(self._save_server_detail)
-        self.server_token.textChanged.connect(self._save_server_detail)
-        self.server_command.textChanged.connect(self._save_server_detail)
-        self.server_args.textChanged.connect(self._save_server_detail)
+        self.server_url.editingFinished.connect(self._save_server_detail)
+        self.server_token.editingFinished.connect(self._save_server_detail)
+        self.server_command.editingFinished.connect(self._save_server_detail)
+        self.server_args.editingFinished.connect(self._save_server_detail)
         self.server_enabled.toggled.connect(self._save_server_detail)
+        self.save_settings_btn.clicked.connect(self._save_config_from_ui)
+        self.reload_settings_btn.clicked.connect(self._reload_config)
 
         self._apply_config_to_ui()
         return panel
@@ -534,6 +547,7 @@ class Plugin:
         self.tool_table = None
         self.add_server_btn = None
         self.remove_server_btn = None
+        self.save_server_btn = None
         self.default_server_btn = None
         self.refresh_tools_btn = None
         self.test_server_btn = None
@@ -554,6 +568,8 @@ class Plugin:
         self.ai_model = None
         self.allowed_dirs = None
         self.add_dir_btn = None
+        self.save_settings_btn = None
+        self.reload_settings_btn = None
         self.install_dir = None
         self.install_browse_btn = None
         self.npm_install_btn = None
@@ -583,25 +599,40 @@ class Plugin:
     def _apply_config_to_ui(self) -> None:
         if not self.server_model:
             return
-        self.server_model.set_rows(self.config.get("servers", []))
-        self._on_server_selected()
-        self.enabled_toggle.setChecked(bool(self.config.get("enabled", True)))
-        self.call_mode_combo.setCurrentText(self.config.get("tool_call_mode", "strict"))
-        self.risk_confirm_toggle.setChecked(bool(self.config.get("risk_confirm", {}).get("enabled", True)))
-        ai_api = self.config.get("ai_api", {})
-        self.ai_mode_combo.setCurrentText(ai_api.get("mode", "reuse"))
-        self.ai_base_url.setText(ai_api.get("base_url", ""))
-        self.ai_api_key.setText(ai_api.get("api_key", ""))
-        self.ai_model.setText(ai_api.get("model", ""))
-        self.allowed_dirs.clear()
-        for item in self.config.get("file_scope", {}).get("allowed_dirs", []):
-            self.allowed_dirs.addItem(item)
-        install_tools = self.config.get("install_tools", {})
-        self.npm_path.setText(install_tools.get("npm_path", ""))
-        self.npx_path.setText(install_tools.get("npx_path", ""))
+        self._is_applying = True
+        try:
+            servers = self.config.get("servers", [])
+            self.server_model.set_rows(servers)
+            default_id = self.config.get("default_server")
+            target_row = 0
+            if isinstance(servers, list) and servers:
+                for idx, item in enumerate(servers):
+                    if isinstance(item, dict) and item.get("id") == default_id:
+                        target_row = idx
+                        break
+            if self.server_table:
+                model_index = self.server_table.model().index(target_row, 0)
+                self.server_table.setCurrentIndex(model_index)
+            self._on_server_selected()
+            self.enabled_toggle.setChecked(bool(self.config.get("enabled", True)))
+            self.call_mode_combo.setCurrentText(self.config.get("tool_call_mode", "strict"))
+            self.risk_confirm_toggle.setChecked(bool(self.config.get("risk_confirm", {}).get("enabled", True)))
+            ai_api = self.config.get("ai_api", {})
+            self.ai_mode_combo.setCurrentText(ai_api.get("mode", "reuse"))
+            self.ai_base_url.setText(ai_api.get("base_url", ""))
+            self.ai_api_key.setText(ai_api.get("api_key", ""))
+            self.ai_model.setText(ai_api.get("model", ""))
+            self.allowed_dirs.clear()
+            for item in self.config.get("file_scope", {}).get("allowed_dirs", []):
+                self.allowed_dirs.addItem(item)
+            install_tools = self.config.get("install_tools", {})
+            self.npm_path.setText(install_tools.get("npm_path", ""))
+            self.npx_path.setText(install_tools.get("npx_path", ""))
+        finally:
+            self._is_applying = False
 
     def _save_config_from_ui(self) -> None:
-        if not self.enabled_toggle:
+        if self._is_applying or not self.enabled_toggle:
             return
         self.config["enabled"] = bool(self.enabled_toggle.isChecked())
         self.config["tool_call_mode"] = self.call_mode_combo.currentText()
@@ -618,6 +649,11 @@ class Plugin:
         install_tools["npx_path"] = self.npx_path.text().strip()
         self.config["install_tools"] = install_tools
         self._save_config()
+
+    def _reload_config(self) -> None:
+        self.config = self._load_config()
+        self._tools_cache = []
+        self._apply_config_to_ui()
 
     def _on_server_selected(self) -> None:
         if not self.server_table:
@@ -651,6 +687,8 @@ class Plugin:
             widget.blockSignals(False)
 
     def _save_server_detail(self) -> None:
+        if self._is_applying:
+            return
         index = self.server_table.currentIndex()
         if not index.isValid():
             return
@@ -668,6 +706,7 @@ class Plugin:
         servers[row]["enabled"] = bool(self.server_enabled.isChecked())
         self.config["servers"] = servers
         self.server_model.set_rows(servers)
+        self._tools_cache = []
         self._save_config()
 
     def _add_server(self) -> None:
@@ -687,6 +726,10 @@ class Plugin:
         self.config["servers"] = servers
         self.server_model.set_rows(servers)
         self._save_config()
+        if self.server_table:
+            model_index = self.server_table.model().index(len(servers) - 1, 0)
+            self.server_table.setCurrentIndex(model_index)
+        self._on_server_selected()
 
     def _remove_server(self) -> None:
         index = self.server_table.currentIndex()
@@ -699,6 +742,8 @@ class Plugin:
             self.config["default_server"] = servers[0].get("id", "") if servers else ""
         self.server_model.set_rows(servers)
         self._save_config()
+        if servers:
+            self._on_server_selected()
 
     def _set_default_server(self) -> None:
         index = self.server_table.currentIndex()
@@ -903,10 +948,14 @@ class Plugin:
 
     def _select_server(self) -> dict | None:
         default_id = self.config.get("default_server")
-        for item in self.config.get("servers", []):
-            if item.get("id") == default_id:
+        servers = [item for item in self.config.get("servers", []) if isinstance(item, dict)]
+        for item in servers:
+            if item.get("id") == default_id and item.get("enabled", True):
                 return item
-        return self.config.get("servers", [None])[0]
+        for item in servers:
+            if item.get("enabled", True):
+                return item
+        return None
 
     def _get_tools(self, refresh: bool = False) -> list[dict]:
         if self._tools_cache and not refresh:
