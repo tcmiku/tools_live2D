@@ -1,15 +1,16 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import os
 import time
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QFormLayout,
     QGroupBox,
@@ -77,6 +78,7 @@ class Plugin:
         self._chart_box = None
         self._table = None
         self._status_label = None
+        self._range_combo = None
         self._retention_spin = None
         self._top_spin = None
         self._bar_spin = None
@@ -132,6 +134,15 @@ class Plugin:
         status_label = QLabel("")
         status_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         root.addWidget(status_label)
+
+        range_row = QHBoxLayout()
+        range_label = QLabel("统计范围：")
+        range_combo = QComboBox()
+        range_combo.addItems(["今天", "本周", "本月"])
+        range_row.addWidget(range_label)
+        range_row.addWidget(range_combo)
+        range_row.addStretch(1)
+        root.addLayout(range_row)
 
         chart_box = QPlainTextEdit()
         chart_box.setReadOnly(True)
@@ -194,6 +205,7 @@ class Plugin:
         save_btn.clicked.connect(self._save_config_from_ui)
         tracking_btn.clicked.connect(self._toggle_tracking)
         clear_btn.clicked.connect(self._clear_stats)
+        range_combo.currentIndexChanged.connect(self._update_ui)
 
         self._panel = panel
         self._summary_label = summary
@@ -207,6 +219,7 @@ class Plugin:
         self._max_title_spin = max_title_spin
         self._tracking_btn = tracking_btn
         self._clear_btn = clear_btn
+        self._range_combo = range_combo
 
         self._update_ui()
         return panel
@@ -291,15 +304,42 @@ class Plugin:
             text = text[: max_len - 3] + "..."
         return text
 
-    def _get_today_items(self) -> list[tuple[str, float, int]]:
-        bucket = self._day_bucket()
+    def _get_range_items(self, days: int) -> tuple[list[tuple[str, float, int]], float]:
+        totals: dict[str, dict[str, float]] = {}
+        total_seconds = 0.0
+        for offset in range(days):
+            key = (date.today() - timedelta(days=offset)).isoformat()
+            bucket = self.state.get("daily", {}).get(key)
+            if not isinstance(bucket, dict):
+                continue
+            total_seconds += float(bucket.get("total_seconds", 0.0) or 0.0)
+            for title, entry in bucket.get("titles", {}).items():
+                seconds = float(entry.get("seconds", 0.0))
+                switches = int(entry.get("switches", 0))
+                if title not in totals:
+                    totals[title] = {"seconds": 0.0, "switches": 0.0}
+                totals[title]["seconds"] += seconds
+                totals[title]["switches"] += switches
         items = []
-        for title, entry in bucket.get("titles", {}).items():
-            seconds = float(entry.get("seconds", 0.0))
-            switches = int(entry.get("switches", 0))
-            items.append((title, seconds, switches))
+        for title, entry in totals.items():
+            items.append((title, float(entry["seconds"]), int(entry["switches"])))
         items.sort(key=lambda item: item[1], reverse=True)
-        return items
+        return items, total_seconds
+
+    def _current_range_days(self) -> int:
+        if not self._range_combo:
+            return 1
+        text = self._range_combo.currentText()
+        if text == "本周":
+            return 7
+        if text == "本月":
+            return 30
+        return 1
+
+    def _current_range_label(self) -> str:
+        if not self._range_combo:
+            return "今天"
+        return self._range_combo.currentText() or "今天"
 
     def _schedule_ui_update(self, now: float) -> None:
         if not self._panel or not self._panel.isVisible():
@@ -312,14 +352,14 @@ class Plugin:
     def _update_ui(self) -> None:
         if not self._panel:
             return
-        items = self._get_today_items()
+        range_days = self._current_range_days()
+        items, total_seconds = self._get_range_items(range_days)
         top_n = int(self.config.get("top_n", 10))
         chart_items = items[:top_n]
-        total_seconds = sum(entry[1] for entry in items)
         top_title = chart_items[0][0] if chart_items else "-"
         if self._summary_label:
             self._summary_label.setText(
-                f"今日总计：{_format_seconds(total_seconds)} | Top：{top_title}"
+                f"{self._current_range_label()}总计：{_format_seconds(total_seconds)} | Top：{top_title}"
             )
         if self._status_label:
             status_text = "运行中" if self.config.get("tracking_enabled", True) else "已暂停"
@@ -340,7 +380,7 @@ class Plugin:
 
     def _build_chart(self, items: list[tuple[str, float, int]]) -> str:
         if not items:
-            return "No data"
+            return "暂无数据"
         bar_width = max(10, int(self.config.get("bar_width", 24)))
         label_width = max(12, min(24, int(self.config.get("max_title_len", 60) / 3)))
         max_value = max(item[1] for item in items) or 1.0
@@ -355,9 +395,9 @@ class Plugin:
             ratio = seconds / max_value if max_value else 0.0
             bar_len = max(0, min(bar_width, int(round(ratio * bar_width))))
             if bar_len > 0:
-                bar = '=' * max(0, bar_len - 1) + '>'
+                bar = "=" * max(0, bar_len - 1) + ">"
             else:
-                bar = ''
+                bar = ""
             bar = bar.ljust(bar_width)
             label = title[:label_width].ljust(label_width)
             pct = f"{ratio * 100:5.1f}%"

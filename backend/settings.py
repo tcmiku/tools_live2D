@@ -112,6 +112,7 @@ class AppSettings:
             "model_edit_mode": False,
             "bindings_path": "data/model_bindings.json",
             "plugins_enabled": {},
+            "auto_startup": False,
         }
         stored = self._data.get("settings", {})
         if not isinstance(stored, dict):

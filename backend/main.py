@@ -61,6 +61,7 @@ try:
     from .stats import FocusStats
     from .ai_client import AIClient
     from .bridge import BackendBridge
+    from .autostart import set_autostart
     from .model_bindings import ModelBindingManager, MotionBinding
     from .settings import AppSettings
     from .pomodoro import PomodoroEngine, reward_for_focus_minutes
@@ -80,6 +81,7 @@ except ImportError:
     from stats import FocusStats
     from ai_client import AIClient
     from bridge import BackendBridge
+    from autostart import set_autostart
     from model_bindings import ModelBindingManager, MotionBinding
     from settings import AppSettings
     from pomodoro import PomodoroEngine, reward_for_focus_minutes
@@ -363,6 +365,7 @@ class SettingsDialog(QDialog):
         self.hotkey_model_edit.setPlaceholderText("Ctrl+Shift+M")
         self.hotkey_launcher.setPlaceholderText("Ctrl+Shift+Space")
         self.hotkey_chat_toggle.setPlaceholderText("Ctrl+H")
+        self.auto_startup_toggle = QCheckBox("开机自启")
 
         self.model_edit_mode_btn = QPushButton("开启模型编辑模式")
         self.model_edit_mode_btn.setCheckable(True)
@@ -386,6 +389,7 @@ class SettingsDialog(QDialog):
         form.addRow("热键：模型编辑", self.hotkey_model_edit)
         form.addRow("热键：启动面板", self.hotkey_launcher)
         form.addRow("热键：聊天框", self.hotkey_chat_toggle)
+        form.addRow("系统", self.auto_startup_toggle)
         form.addRow(self.model_edit_mode_btn)
 
         self.buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
@@ -409,6 +413,7 @@ class SettingsDialog(QDialog):
         self.hotkey_model_edit.setText(str(data.get("hotkey_model_edit", "Ctrl+Shift+M")))
         self.hotkey_launcher.setText(str(data.get("hotkey_launcher_panel", "Ctrl+Shift+Space")))
         self.hotkey_chat_toggle.setText(str(data.get("hotkey_chat_toggle", "Ctrl+H")))
+        self.auto_startup_toggle.setChecked(bool(data.get("auto_startup", False)))
         edit_mode = bool(data.get("model_edit_mode", False))
         self.model_edit_mode_btn.setChecked(edit_mode)
         self.model_edit_mode_btn.setText("关闭模型编辑模式" if edit_mode else "开启模型编辑模式")
@@ -432,6 +437,7 @@ class SettingsDialog(QDialog):
             "hotkey_model_edit": self.hotkey_model_edit.text().strip(),
             "hotkey_launcher_panel": self.hotkey_launcher.text().strip(),
             "hotkey_chat_toggle": self.hotkey_chat_toggle.text().strip(),
+            "auto_startup": bool(self.auto_startup_toggle.isChecked()),
             "model_edit_mode": bool(self.model_edit_mode_btn.isChecked()),
         }
 
@@ -1920,6 +1926,10 @@ def main() -> None:
             passive_base_config.focus_enabled = bool(data.get("passive_focus_enabled", True))
             passive_base_config.focus_interval_min = int(data.get("passive_focus_interval_min", 60))
             apply_passive_config_for_mood(int(data.get("mood", 60)))
+            enabled = bool(data.get("auto_startup", False))
+            ok, message = set_autostart(enabled, "ToolsLive2D", BASE_DIR)
+            if not ok and message:
+                logging.warning("auto start update failed: %s", message)
         except Exception as exc:
             logging.exception("apply settings failed: %s", exc)
 
