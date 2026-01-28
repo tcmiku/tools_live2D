@@ -1,7 +1,0 @@
-{
-  "id": "network_diag",
-  "name": "Network Diagnostics Assistant",
-  "version": "0.1.0",
-  "description": "站点延迟检查、网络质量评分与诊断建议。",
-  "entry": "main.py"
-}

@@ -1,7 +1,0 @@
-{
-  "id": "encourage_pack",
-  "name": "Encourage Packs",
-  "version": "0.1.0",
-  "description": "定时切换鼓励语料包，按时段推送鼓励话术。",
-  "entry": "main.py"
-}

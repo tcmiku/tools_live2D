@@ -1084,15 +1084,15 @@ function setupGiftButton() {
 }
 
 function setupQuickToolbar() {
-  const toolbar = document.getElementById("quick-toolbar");
-  if (!toolbar) return;
-  const toggleBtn = document.getElementById("quick-toggle");
-  const noteBtn = document.getElementById("quick-note");
-  const pomoBtn = document.getElementById("quick-pomodoro");
-  const modelBtn = document.getElementById("quick-model");
-  const launcherBtn = document.getElementById("quick-launcher");
-  const settingsBtn = document.getElementById("quick-settings");
-  const collapseBtn = document.getElementById("quick-collapse");
+    const toolbar = document.getElementById("quick-toolbar");
+    if (!toolbar) return;
+    const toggleBtn = document.getElementById("quick-toggle");
+    const pomoBtn = document.getElementById("quick-pomodoro");
+    const modelBtn = document.getElementById("quick-model");
+    const launcherBtn = document.getElementById("quick-launcher");
+    const settingsBtn = document.getElementById("quick-settings");
+    const pluginBtn = document.getElementById("quick-plugins");
+    const collapseBtn = document.getElementById("quick-collapse");
 
   if (collapseBtn) {
     collapseBtn.addEventListener("click", () => {
@@ -1102,27 +1102,23 @@ function setupQuickToolbar() {
     collapseBtn.textContent = toolbar.classList.contains("collapsed") ? "\u25C0" : "\u25B6";
   }
 
-  if (toggleBtn) {
-    toggleBtn.addEventListener("click", () => {
-      if (backend && typeof backend.togglePetWindow === "function") {
-        backend.togglePetWindow();
-      } else {
-        toggleChatPanelVisibility();
-      }
-    });
-  }
-  if (noteBtn) {
-    noteBtn.addEventListener("click", () => toggleToolPanel("note-panel"));
-  }
+    if (toggleBtn) {
+      toggleBtn.addEventListener("click", () => {
+        toggleToolPanel("note-panel");
+      });
+    }
   if (pomoBtn) {
     pomoBtn.addEventListener("click", () => toggleToolPanel("pomodoro-panel"));
   }
   if (modelBtn) {
     modelBtn.addEventListener("click", () => switchModel());
   }
-  if (launcherBtn) {
-    launcherBtn.addEventListener("click", () => toggleToolPanel("launcher-panel"));
-  }
+    if (launcherBtn) {
+      launcherBtn.addEventListener("click", () => toggleToolPanel("launcher-panel"));
+    }
+    if (pluginBtn) {
+      pluginBtn.addEventListener("click", () => toggleToolPanel("plugin-panel"));
+    }
   if (settingsBtn) {
     settingsBtn.addEventListener("click", () => toggleToolPanel("settings-panel"));
   }

@@ -1,0 +1,7 @@
+{
+  "id": "wooden_fish",
+  "name": "电子木鱼",
+  "version": "1.0.0",
+  "description": "点击敲木鱼，记录功德次数，可开启自动敲击。",
+  "entry": "main.py"
+}
