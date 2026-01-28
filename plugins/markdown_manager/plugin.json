@@ -1,0 +1,7 @@
+{
+  "id": "markdown_manager",
+  "name": "Markdown Manager",
+  "version": "0.1.0",
+  "description": "本地 Markdown 管理与检索",
+  "entry": "main.py"
+}

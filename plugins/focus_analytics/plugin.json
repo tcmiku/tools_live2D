@@ -1,0 +1,7 @@
+{
+  "id": "focus_analytics",
+  "name": "Focus Analytics",
+  "version": "0.1.0",
+  "description": "统计前台窗口标题的使用时长与切换频次。",
+  "entry": "main.py"
+}
