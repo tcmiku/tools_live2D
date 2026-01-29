@@ -1,0 +1,7 @@
+{
+  "id": "plastic_memories",
+  "name": "Plastic Memories",
+  "version": "0.1.0",
+  "description": "Plastic Memories 接入（Persona/Recall/Memory/Messages）",
+  "entry": "main.py"
+}

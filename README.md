@@ -205,6 +205,7 @@ tools_live2D/
 
 #### 5.1 内置插件
 - **file_organizer** - AI 生成分类类别，预览/整理/撤销，日志与历史记录独立存储
+- **plastic_memories** - Plastic Memories 接入（Persona/Recall/Memory/Messages），为 AI 提供可注入记忆
 
 #### 6. 动作绑定面板
 - **分类**：心情/状态/番茄钟/AI/互动
@@ -720,6 +721,27 @@ def on_load(self, context):
 - **导入插件**：右键托盘 → 插件管理 → 导入压缩包
 - **启用/禁用**：在插件管理面板勾选/取消勾选
 - **重载插件**：右键托盘 → 插件管理 → 重新加载选中/全部
+
+#### 6. Plastic Memories 插件（MVP）
+
+- **配置文件**：`data/plugins/plastic_memories/config.json`
+- **环境变量**（可覆盖配置）：
+  - `PM_BASE_URL`（默认 `http://127.0.0.1:8007`）
+  - `PM_USER_ID`（默认 `local`）
+  - `PM_PERSONA_ID`（默认 `persona_1`）
+  - `PM_TEMPLATE_PATH`（默认 `personas/persona_1`）
+  - `PM_SOURCE_APP`（默认 `tools_live2D`）
+  - `PM_TIMEOUT`（默认 `10`）
+  - `PM_ENABLED`（默认 `true`）
+- **启用方式**：插件管理面板勾选启用，或在 `data/settings.json` 的 `plugins_enabled` 中设置：
+  ```json
+  { "settings": { "plugins_enabled": { "plastic_memories": true } } }
+  ```
+- **运行时调用 API**：
+  - `POST /persona/create_from_template`（启动时）
+  - `POST /memory/recall`（每次对话前注入）
+  - `POST /messages/append`（每次对话后写入，支持 422 单条 fallback）
+  - `POST /memory/write`（本地规则提炼后写入单条记忆）
 
 ### 添加新功能
 

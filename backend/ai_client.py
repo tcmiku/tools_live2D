@@ -91,10 +91,17 @@ class AIClient:
         favor_hint = self._favor_hint()
         mood_hint = self._mood_hint()
         plugin_hint = ""
+        pm_injection = False
         if plugin_context:
-            context_text = "\n".join([text for text in plugin_context if text])
-            if context_text:
-                plugin_hint = f"插件上下文：\n{context_text}\n"
+            normalized = [text for text in plugin_context if isinstance(text, str) and text.strip()]
+            if normalized:
+                # 若插件已生成注入块，则直接拼入 system prompt，避免被当作普通提示。
+                if any("[PLASTIC_MEMORIES_INJECTION]" in text for text in normalized):
+                    pm_injection = True
+                    plugin_hint = "\n".join(normalized) + "\n"
+                else:
+                    context_text = "\n".join(normalized)
+                    plugin_hint = f"插件上下文：\n{context_text}\n"
         system_prompt = (
             "你是一只友好的 Live2D 桌面宠物。"
             "语气轻松、鼓励用户专注、回答简洁。"
@@ -106,8 +113,10 @@ class AIClient:
             f"{plugin_hint}"
         )
 
+        if pm_injection:
+            logging.info("已切换为后端记忆模式")
         with self._lock:
-            history = list(self._history)
+            history = [] if pm_injection else list(self._history)
         payload = {
             "messages": [
                 {"role": "system", "content": system_prompt},

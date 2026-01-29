@@ -444,6 +444,7 @@ class PluginManager:
 
     def collect_ai_context(self, user_text: str) -> list[str]:
         collected: list[str] = []
+        # 避免刷屏，仅在需要时开启更细日志。
         with self._ai_lock:
             if self._ai_context:
                 collected.extend(self._ai_context)
