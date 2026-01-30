@@ -117,9 +117,69 @@ function appendChatMessage(who, text) {
   const box = document.getElementById("chat-box");
   const msg = document.createElement("div");
   msg.className = `msg ${who}`;
-  msg.textContent = text;
+  msg.innerHTML = `<div class=\"rich\">${renderRichText(text)}</div>`;
   box.appendChild(msg);
   box.scrollTop = box.scrollHeight;
+}
+
+function renderRichText(text) {
+  const raw = String(text ?? "");
+  const blocks = [];
+  let idx = 0;
+  raw.replace(/```([\s\S]*?)```/g, (match, code, offset) => {
+    if (offset > idx) {
+      blocks.push({ type: "text", value: raw.slice(idx, offset) });
+    }
+    blocks.push({ type: "code", value: code });
+    idx = offset + match.length;
+    return match;
+  });
+  if (idx < raw.length) {
+    blocks.push({ type: "text", value: raw.slice(idx) });
+  }
+
+  return blocks
+    .map((block) => {
+      if (block.type === "code") {
+        return `<pre><code>${escapeHtml(block.value)}</code></pre>`;
+      }
+      return renderInline(block.value);
+    })
+    .join("");
+}
+
+function renderInline(text) {
+  let html = escapeHtml(text);
+  html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+  html = html.replace(
+    /(https?:\/\/[^\s<]+)/g,
+    '<a href="$1" target="_blank" rel="noreferrer">$1</a>'
+  );
+  const lines = html.split(/\r?\n/);
+  if (lines.some((line) => line.trim().startsWith("- "))) {
+    const items = lines
+      .filter((line) => line.trim().length > 0)
+      .map((line) => {
+        if (line.trim().startsWith("- ")) {
+          return `<li>${line.trim().slice(2)}</li>`;
+        }
+        return `<li>${line.trim()}</li>`;
+      })
+      .join("");
+    return `<ul>${items}</ul>`;
+  }
+  return `<p>${lines.join("<br>")}</p>`;
+}
+
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function getBindingValue(category, key) {
@@ -414,22 +474,54 @@ function handleStateUpdate(state) {
 
 function sendUserMessage() {
   const input = document.getElementById("chat-input");
-  const text = input.value.trim();
+  const text = (input.innerText || "").replace(/\u00a0/g, " ").trim();
   if (!text || !backend) return;
   appendChatMessage("user", text);
   if (typeof backend.addFavor === "function") {
     backend.addFavor(1);
   }
   backend.sendUserMessage(text);
-  input.value = "";
+  input.innerHTML = "";
 }
 
 function setupEnterSend() {
   const input = document.getElementById("chat-input");
   input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
       sendUserMessage();
     }
+  });
+}
+
+function setupChatResize() {
+  const handle = document.getElementById("chat-resize");
+  const box = document.getElementById("chat-box");
+  if (!handle || !box) return;
+  const savedHeight = Number(localStorage.getItem("chatBoxHeight"));
+  if (savedHeight) {
+    box.style.height = `${savedHeight}px`;
+  }
+  let dragging = false;
+  let startY = 0;
+  let startHeight = 0;
+  handle.addEventListener("mousedown", (event) => {
+    dragging = true;
+    startY = event.clientY;
+    startHeight = box.getBoundingClientRect().height;
+    event.preventDefault();
+  });
+  window.addEventListener("mousemove", (event) => {
+    if (!dragging) return;
+    const delta = startY - event.clientY;
+    const next = Math.max(80, Math.min(260, startHeight + delta));
+    box.style.height = `${next}px`;
+  });
+  window.addEventListener("mouseup", () => {
+    if (!dragging) return;
+    dragging = false;
+    const height = Math.round(box.getBoundingClientRect().height);
+    localStorage.setItem("chatBoxHeight", String(height));
   });
 }
 
@@ -2710,6 +2802,7 @@ function syncSettingsFromBackend(retries = 5) {
 
 setupContextMenu();
 setupEnterSend();
+setupChatResize();
 setupChatPanelBehavior();
 setupSettingsPanel();
   setupNotePanel();

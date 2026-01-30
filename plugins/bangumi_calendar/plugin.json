@@ -1,0 +1,7 @@
+{
+  "id": "bangumi_calendar",
+  "name": "Bangumi 新番日历",
+  "version": "0.1.0",
+  "description": "新番周表缓存与被动气泡联动。",
+  "entry": "main.py"
+}
